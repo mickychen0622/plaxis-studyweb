@@ -1,0 +1,415 @@
+# ════════════════════════════════════════════════════════════════════
+# KuanMing_plan_e7：光明地下廠房 plan_e 完整建模指令（PLAXIS 2D Input Command）
+# 對照老師 OpenSees 模型（report_guangming_excavation.pdf）：幾何、範圍、17 階、無支撐、每階完全釋放
+# 岩體：研究計畫參數（同 e6；加密區以內全部 cf 0.17947 ≈ 2.5 m）（MC、ψ 0、tension cut-off 開）；K0x 0.485、K0z 0.3564
+# e7 ＝ e6 全部照舊（幾何、材料、相位、量測點、Max cores 12、Tolerated error 0.001），只改網格：
+#   加密區 Polygon_1 以內（15 m 矩形、兩個 6 m 矩形、開挖區 polygon）cf 全改成 0.17947（≈ 2.5 m），
+#   與加密區相同 → 加密區內整片約 2.5 m；加密圈幾何仍保留（物件名稱與 e4／e6 一致）。以下 ①–④ 同 e4：
+#   ① 張力截斷開、T 289 kPa；② 主廠房拱腳刪除與導坑底交點相距 0.198 m 的弧點；
+#   ③ 近域矩形 近域15m矩形（兩洞）、近域6m矩形（主廠房）、近域6m矩形（主變室）（幾何同 e4，元素改 2.5 m）；
+#   ④ 第 3 節末建量測點 Point，第 7 節在 Output 選為 curve points（老師表 4.1 的量測點）。
+#   ⚠ 加密圈使開挖區物件名稱多一層（Soil_1_Soil_2_Soil_3_Soil_4_…）；名稱為推廣規則所得，若出現 Unknown object 請回報。
+# 用法：PLAXIS 2D Input 開「新專案」（預設 kN、m、平面應變、15 節點）→ Expert > Commands runner
+#       → 整份貼上執行（會在第 7 節的 acp 停下，前 6 節已完成並存檔）。
+#       之後：Staged construction 按「Select points for curves」開 Output → 第 7 節貼進 Output 的
+#       Commands runner（acp 選點、update 回 Input）→ 回 Input 拿掉第 8 節 calculate、save 的 # 後執行。
+# 座標：x 同老師（主廠房中心 0）；Y ＝ EL − 1203（地表 0）；老師 y ＝ Y ＋ 337.8
+# ⚠ 網格與相位的物件名稱是 PLAXIS 交切後自動命名，依賴幾何指令的順序；請勿增刪、調換幾何指令。
+# 產生腳本：KuanMing_Plaxis2D\KuanMing_plan_e\make_commands.py（數值來自 plan_e_model.py）
+# ════════════════════════════════════════════════════════════════════
+save "E:\01地下電廠洞室開挖支撐設計分析\KuanMing_Plaxis2D\KuanMing_plan_e\e7\e7_TC289_Cores12_Tol0001_Inner2p5m.p2dx"
+# ── 1. 分析域與鑽孔 ──
+# 分析域 x -315～360 m、Y -637.8～0（EL.565.2–1203；老師 y −300～337.8）
+initializerectangular SoilContour -315 -637.8 360 0
+# 鑽孔：單一岩層 637.8 m；水頭放在模型底以下（乾燥，同老師）
+borehole 0
+soillayer 637.8
+set Borehole_1.Head -647.8
+# ── 2. 岩體材料 ──
+# MC：E 15 GPa、ν 0.24、c 1351 kPa、φ 38.8°、ψ 0、σt 289 kPa、γ 27.0
+# K0x 0.485（面內）、K0z ＝ ν(1＋K0x) ＝ 0.3564（出平面，與老師的 σz ＝ ν(σx＋σy) 相同）
+soilmat "Identification" "Rock_MC_TC289" "SoilModel" 2 "DrainageType" "Drained" "gammaUnsat" 27.0 "gammaSat" 27.0 "nu" 0.24 "Eref" 15000000.0 "cref" 1351.0 "phi" 38.8 "psi" 0.0 "TensionCutOff" True "TensileStrength" 289.0
+set Rock_MC_TC289.K0Determination "Manual"
+set Rock_MC_TC289.K0PrimaryIsK0Secondary False
+set Rock_MC_TC289.K0Primary 0.485
+set Rock_MC_TC289.K0Secondary 0.3564
+set Soillayer_1.Soil.Material Rock_MC_TC289
+# ── 3. 幾何（開挖區 polygon；無支撐，不畫洞周線）──
+# 切到 Structures 模式
+gotostructures
+# 加密區 Polygon_1：兩洞外接矩形外推 25 m（x -37.7～85.5、EL.840.2–939.7）
+polygon (-37.7 -362.8) (85.5 -362.8) (85.5 -263.3) (-37.7 -263.3)
+set Soil_2.Material Rock_MC_TC289
+# 加密圈 Polygon_2：近域15m矩形（兩洞）（4 點，元素 1 m）
+polygon (-27.7 -352.8) (75.5 -352.8) (75.5 -273.3) (-27.7 -273.3)
+set Soil_3.Material Rock_MC_TC289
+# 加密圈 Polygon_3：近域6m矩形（主廠房）（4 點，元素 0.5 m）
+polygon (-18.7 -343.8) (18.7 -343.8) (18.7 -282.3) (-18.7 -282.3)
+set Soil_4.Material Rock_MC_TC289
+# 加密圈 Polygon_4：近域6m矩形（主變室）（4 點，元素 0.5 m）
+polygon (36.7 -325.6) (66.5 -325.6) (66.5 -292.7) (36.7 -292.7)
+set Soil_5.Material Rock_MC_TC289
+# 主廠房：導坑、右擴挖、左擴挖 Polygon_5 ~ Polygon_7
+polygon (4.2 -293.8) (4.2 -288.7198) (3.4152 -288.5766) (2.5663 -288.4557) (1.7132 -288.3693) (0.8573 -288.3173) (0 -288.3) (-0.8573 -288.3173) (-1.7132 -288.3693) (-2.5663 -288.4557) (-3.4152 -288.5766) (-4.2 -288.7198) (-4.2 -293.8)
+set Soil_6.Material Rock_MC_TC289
+polygon (12.4507 -293.8) (12.2699 -293.3168) (11.9435 -292.6823) (11.5344 -292.0979) (11.0499 -291.5742) (10.4989 -291.1209) (9.8918 -290.7463) (9.1252 -290.3621) (8.3438 -290.0091) (7.5487 -289.688) (6.7413 -289.3992) (5.9229 -289.1433) (5.0949 -288.9207) (4.2 -288.7198) (4.2 -293.8)
+set Soil_7.Material Rock_MC_TC289
+polygon (-4.2 -293.8) (-4.2 -288.7198) (-5.0949 -288.9207) (-5.9229 -289.1433) (-6.7413 -289.3992) (-7.5487 -289.688) (-8.3438 -290.0091) (-9.1252 -290.3621) (-9.8918 -290.7463) (-10.4989 -291.1209) (-11.0499 -291.5742) (-11.5344 -292.0979) (-11.9435 -292.6823) (-12.2699 -293.3168) (-12.4507 -293.8)
+set Soil_8.Material Rock_MC_TC289
+# 主廠房：台階 15 階（由上而下） Polygon_8 ~ Polygon_22
+polygon (12.7 -296.4) (12.7 -295.4) (12.6516 -294.6882) (12.4507 -293.8) (-12.4507 -293.8) (-12.6516 -294.6882) (-12.7 -295.4) (-12.7 -296.4)
+set Soil_9.Material Rock_MC_TC289
+polygon (12.7 -298.9) (12.7 -296.4) (-12.7 -296.4) (-12.7 -298.9)
+set Soil_10.Material Rock_MC_TC289
+polygon (12.7 -301.4) (12.7 -298.9) (-12.7 -298.9) (-12.7 -301.4)
+set Soil_11.Material Rock_MC_TC289
+polygon (12.7 -303.9) (12.7 -301.4) (-12.7 -301.4) (-12.7 -303.9)
+set Soil_12.Material Rock_MC_TC289
+polygon (12.7 -307) (12.7 -303.9) (-12.7 -303.9) (-12.7 -307)
+set Soil_13.Material Rock_MC_TC289
+polygon (12.7 -309.5) (12.7 -307) (-12.7 -307) (-12.7 -309.5)
+set Soil_14.Material Rock_MC_TC289
+polygon (12.7 -312) (12.7 -309.5) (-12.7 -309.5) (-12.7 -312)
+set Soil_15.Material Rock_MC_TC289
+polygon (12.7 -315) (12.7 -312) (-12.7 -312) (-12.7 -315)
+set Soil_16.Material Rock_MC_TC289
+polygon (12.7 -318.1) (12.7 -315) (-12.7 -315) (-12.7 -318.1)
+set Soil_17.Material Rock_MC_TC289
+polygon (12.7 -321.1) (12.7 -318.1) (-12.7 -318.1) (-12.7 -321.1)
+set Soil_18.Material Rock_MC_TC289
+polygon (12.7 -324.1) (12.7 -321.1) (-12.7 -321.1) (-12.7 -324.1)
+set Soil_19.Material Rock_MC_TC289
+polygon (12.7 -327.2) (12.7 -324.1) (-12.7 -324.1) (-12.7 -327.2)
+set Soil_20.Material Rock_MC_TC289
+polygon (12.7 -330.7) (12.7 -327.2) (-12.7 -327.2) (-12.7 -330.7)
+set Soil_21.Material Rock_MC_TC289
+polygon (12.7 -333.8) (12.7 -330.7) (-12.7 -330.7) (-12.7 -333.8)
+set Soil_22.Material Rock_MC_TC289
+polygon (12.7 -337.8) (12.7 -333.8) (-12.7 -333.8) (-12.7 -337.8)
+set Soil_23.Material Rock_MC_TC289
+# 主變室：導坑、右擴挖、左擴挖 Polygon_23 ~ Polygon_25
+polygon (55.6 -303.4) (55.6 -299.2406) (54.7009 -299.0225) (54.0872 -298.9067) (53.4691 -298.8164) (52.8479 -298.7518) (52.2245 -298.7129) (51.6 -298.7) (50.9755 -298.7129) (50.3521 -298.7518) (49.7309 -298.8164) (49.1128 -298.9067) (48.4991 -299.0225) (47.6 -299.2406) (47.6 -303.4)
+set Soil_24.Material Rock_MC_TC289
+polygon (60.5 -303.4) (60.4706 -302.9626) (60.383 -302.533) (60.2387 -302.1191) (60.0403 -301.7281) (59.7914 -301.3673) (59.4965 -301.0429) (59.1608 -300.7609) (58.7905 -300.5264) (58.2355 -300.2397) (57.6691 -299.9763) (57.0923 -299.7367) (56.5061 -299.5211) (55.6 -299.2406) (55.6 -303.4)
+set Soil_25.Material Rock_MC_TC289
+polygon (47.6 -303.4) (47.6 -299.2406) (46.6939 -299.5211) (46.1077 -299.7367) (45.5309 -299.9763) (44.9645 -300.2397) (44.4095 -300.5264) (44.0392 -300.7609) (43.7035 -301.0429) (43.4086 -301.3673) (43.1597 -301.7281) (42.9613 -302.1191) (42.817 -302.533) (42.7294 -302.9626) (42.7 -303.4)
+set Soil_26.Material Rock_MC_TC289
+# 主變室：台階 6 階（由上而下） Polygon_26 ~ Polygon_31
+polygon (60.5 -307) (60.5 -303.4) (42.7 -303.4) (42.7 -307)
+set Soil_27.Material Rock_MC_TC289
+polygon (60.5 -309.5) (60.5 -307) (42.7 -307) (42.7 -309.5)
+set Soil_28.Material Rock_MC_TC289
+polygon (60.5 -312) (60.5 -309.5) (42.7 -309.5) (42.7 -312)
+set Soil_29.Material Rock_MC_TC289
+polygon (60.5 -314.5) (60.5 -312) (42.7 -312) (42.7 -314.5)
+set Soil_30.Material Rock_MC_TC289
+polygon (60.5 -317.1) (60.5 -314.5) (42.7 -314.5) (42.7 -317.1)
+set Soil_31.Material Rock_MC_TC289
+polygon (60.5 -319.6) (60.5 -317.1) (42.7 -317.1) (42.7 -319.6)
+set Soil_32.Material Rock_MC_TC289
+# 量測點 Point_1 ~ Point_11（老師表 4.1）：建成幾何點使該處一定有節點，第 7 節選為 curve points
+#   點放在所有 polygon 之後建立，不改變上面 polygon／土體的編號
+point 0 -288.3            # PH_CROWN：主廠房拱頂
+point 0 -263.3            # PH_CROWN_REF：拱頂上方 25 m 參考點
+point 0 -337.8            # PH_FLOOR：主廠房底板中央
+point 0 -362.8            # PH_FLOOR_REF：底板下方 25 m 參考點
+point -12.7 -316.6        # PH_WALL_L：主廠房左牆 EL.886.4
+point 12.7 -316.6         # PH_WALL_R：主廠房右牆（岩柱側）EL.886.4
+point 42.7 -309.2         # TR_WALL_L：主變室左牆（岩柱側）EL.893.8
+point 60.5 -309.2         # TR_WALL_R：主變室右牆 EL.893.8
+point 51.6 -298.7         # TR_CROWN：主變室拱頂（補充）
+point 51.6 -319.6         # TR_FLOOR：主變室底板中央（補充）
+point 27.7 -310.5         # PILLAR_MID：岩柱中心 EL.892.5（補充）
+# ── 4. 網格 ──
+# 開挖區 polygon cf 0.17947（≈ 2.5 m）、加密區 cf 0.17947（≈ 2.5 m）；整體 element distribution 0.015（re 0.25，le 13.93 m）
+gotomesh
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_6_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_7_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_8_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_9_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_10_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_11_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_12_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_13_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_14_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_15_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_16_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_17_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_18_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_19_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_20_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_21_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_22_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_23_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_24_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_25_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_26_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_27_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_28_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_29_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_30_1.CoarsenessFactor 0.179470
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_31_1.CoarsenessFactor 0.179470
+# 近域15m矩形（兩洞）（扣掉內部物件後）cf 0.17947（≈ 2.5 m）
+set BoreholePolygon_1_Polygon_1_Polygon_2_1.CoarsenessFactor 0.179470
+# 近域6m矩形（主廠房）（扣掉內部物件後）cf 0.17947（≈ 2.5 m）
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_1.CoarsenessFactor 0.179470
+# 近域6m矩形（主變室）（扣掉內部物件後）cf 0.17947（≈ 2.5 m）
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_1.CoarsenessFactor 0.179470
+# 加密區（圖中紅色環帶，扣掉 15 m 矩形後）cf 0.17947（≈ 2.5 m）
+set BoreholePolygon_1_Polygon_1_1.CoarsenessFactor 0.179470
+mesh 0.015
+# ── 5. 施工相位（17 階；每階停用本階岩體，ΣMstage 0 → 1 完全釋放；無支撐）──
+# 切到 Staged construction 模式；初始相位 K0 procedure
+gotostages
+set InitialPhase.Identification "Ph0_地應力平衡"
+set InitialPhase.DeformCalcType "K0 procedure"
+set InitialPhase.MaxCores 12
+# ── Phase_1：L01 主廠房頂拱中央導坑 ──
+phase InitialPhase
+set Phase_1.Identification "L01_主廠房頂拱中央導坑"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_6_1 Phase_1
+set Phase_1.Deform.Loading.SumMstage 1.0
+set Phase_1.MaxCores 12
+# ── Phase_2：L02 主廠房頂拱兩側擴挖 ──
+phase Phase_1
+set Phase_2.Identification "L02_主廠房頂拱兩側擴挖"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_7_1 Phase_2
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_8_1 Phase_2
+set Phase_2.Deform.Loading.SumMstage 1.0
+set Phase_2.MaxCores 12
+# ── Phase_3：L03 主廠房台階至EL906.6 ──
+phase Phase_2
+set Phase_3.Identification "L03_主廠房台階至EL906.6"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_9_1 Phase_3
+set Phase_3.Deform.Loading.SumMstage 1.0
+set Phase_3.MaxCores 12
+# ── Phase_4：L04 主廠房台階至EL904.1 ──
+phase Phase_3
+set Phase_4.Identification "L04_主廠房台階至EL904.1"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_10_1 Phase_4
+set Phase_4.Deform.Loading.SumMstage 1.0
+set Phase_4.MaxCores 12
+# ── Phase_5：L05 主廠房台階至EL901.6＋主變室頂拱中央導坑 ──
+phase Phase_4
+set Phase_5.Identification "L05_主廠房台階至EL901.6＋主變室頂拱中央導坑"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_11_1 Phase_5
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_24_1 Phase_5
+set Phase_5.Deform.Loading.SumMstage 1.0
+set Phase_5.MaxCores 12
+# ── Phase_6：L06 主廠房台階至EL899.1 ──
+phase Phase_5
+set Phase_6.Identification "L06_主廠房台階至EL899.1"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_12_1 Phase_6
+set Phase_6.Deform.Loading.SumMstage 1.0
+set Phase_6.MaxCores 12
+# ── Phase_7：L07 主廠房台階至EL896.0 ──
+phase Phase_6
+set Phase_7.Identification "L07_主廠房台階至EL896.0"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_13_1 Phase_7
+set Phase_7.Deform.Loading.SumMstage 1.0
+set Phase_7.MaxCores 12
+# ── Phase_8：L08 主廠房台階至EL893.5 ──
+phase Phase_7
+set Phase_8.Identification "L08_主廠房台階至EL893.5"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_14_1 Phase_8
+set Phase_8.Deform.Loading.SumMstage 1.0
+set Phase_8.MaxCores 12
+# ── Phase_9：L09 主廠房台階至EL891.0 ──
+phase Phase_8
+set Phase_9.Identification "L09_主廠房台階至EL891.0"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_15_1 Phase_9
+set Phase_9.Deform.Loading.SumMstage 1.0
+set Phase_9.MaxCores 12
+# ── Phase_10：L10 主廠房台階至EL888.0 ──
+phase Phase_9
+set Phase_10.Identification "L10_主廠房台階至EL888.0"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_16_1 Phase_10
+set Phase_10.Deform.Loading.SumMstage 1.0
+set Phase_10.MaxCores 12
+# ── Phase_11：L11 主廠房台階至EL884.9＋主變室頂拱兩側擴挖 ──
+phase Phase_10
+set Phase_11.Identification "L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_17_1 Phase_11
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_25_1 Phase_11
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_26_1 Phase_11
+set Phase_11.Deform.Loading.SumMstage 1.0
+set Phase_11.MaxCores 12
+# ── Phase_12：L12 主廠房台階至EL881.9＋主變室台階至EL896.0 ──
+phase Phase_11
+set Phase_12.Identification "L12_主廠房台階至EL881.9＋主變室台階至EL896.0"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_18_1 Phase_12
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_27_1 Phase_12
+set Phase_12.Deform.Loading.SumMstage 1.0
+set Phase_12.MaxCores 12
+# ── Phase_13：L13 主廠房台階至EL878.9＋主變室台階至EL893.5 ──
+phase Phase_12
+set Phase_13.Identification "L13_主廠房台階至EL878.9＋主變室台階至EL893.5"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_19_1 Phase_13
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_28_1 Phase_13
+set Phase_13.Deform.Loading.SumMstage 1.0
+set Phase_13.MaxCores 12
+# ── Phase_14：L14 主廠房台階至EL875.8＋主變室台階至EL891.0 ──
+phase Phase_13
+set Phase_14.Identification "L14_主廠房台階至EL875.8＋主變室台階至EL891.0"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_20_1 Phase_14
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_29_1 Phase_14
+set Phase_14.Deform.Loading.SumMstage 1.0
+set Phase_14.MaxCores 12
+# ── Phase_15：L15 主廠房台階至EL872.3＋主變室台階至EL888.5 ──
+phase Phase_14
+set Phase_15.Identification "L15_主廠房台階至EL872.3＋主變室台階至EL888.5"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_21_1 Phase_15
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_30_1 Phase_15
+set Phase_15.Deform.Loading.SumMstage 1.0
+set Phase_15.MaxCores 12
+# ── Phase_16：L16 主廠房台階至EL869.2＋主變室台階至EL885.9 ──
+phase Phase_15
+set Phase_16.Identification "L16_主廠房台階至EL869.2＋主變室台階至EL885.9"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_22_1 Phase_16
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_31_1 Phase_16
+set Phase_16.Deform.Loading.SumMstage 1.0
+set Phase_16.MaxCores 12
+# ── Phase_17：L17 主廠房台階至EL865.2＋主變室台階至EL883.4 ──
+phase Phase_16
+set Phase_17.Identification "L17_主廠房台階至EL865.2＋主變室台階至EL883.4"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_23_1 Phase_17
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_32_1 Phase_17
+set Phase_17.Deform.Loading.SumMstage 1.0
+set Phase_17.MaxCores 12
+# ── 6. 迭代參數 ──
+# L01 起全部相位用放寬參數（plan3a／plan_p2 那組）；預設參數在 1 m 網格 L07、0.5 m 網格 L02 即 Error 101
+set Phase_1.Deform.UseDefaultIterationParams False
+set Phase_1.Deform.ArcLengthControl "Off"
+set Phase_1.Deform.MaxSteps 3000
+set Phase_1.Deform.MaxUnloadingSteps 20
+set Phase_1.Deform.MaxLoadFractionPerStep 0.1
+set Phase_1.Deform.ToleratedError 0.001
+set Phase_2.Deform.UseDefaultIterationParams False
+set Phase_2.Deform.ArcLengthControl "Off"
+set Phase_2.Deform.MaxSteps 3000
+set Phase_2.Deform.MaxUnloadingSteps 20
+set Phase_2.Deform.MaxLoadFractionPerStep 0.1
+set Phase_2.Deform.ToleratedError 0.001
+set Phase_3.Deform.UseDefaultIterationParams False
+set Phase_3.Deform.ArcLengthControl "Off"
+set Phase_3.Deform.MaxSteps 3000
+set Phase_3.Deform.MaxUnloadingSteps 20
+set Phase_3.Deform.MaxLoadFractionPerStep 0.1
+set Phase_3.Deform.ToleratedError 0.001
+set Phase_4.Deform.UseDefaultIterationParams False
+set Phase_4.Deform.ArcLengthControl "Off"
+set Phase_4.Deform.MaxSteps 3000
+set Phase_4.Deform.MaxUnloadingSteps 20
+set Phase_4.Deform.MaxLoadFractionPerStep 0.1
+set Phase_4.Deform.ToleratedError 0.001
+set Phase_5.Deform.UseDefaultIterationParams False
+set Phase_5.Deform.ArcLengthControl "Off"
+set Phase_5.Deform.MaxSteps 3000
+set Phase_5.Deform.MaxUnloadingSteps 20
+set Phase_5.Deform.MaxLoadFractionPerStep 0.1
+set Phase_5.Deform.ToleratedError 0.001
+set Phase_6.Deform.UseDefaultIterationParams False
+set Phase_6.Deform.ArcLengthControl "Off"
+set Phase_6.Deform.MaxSteps 3000
+set Phase_6.Deform.MaxUnloadingSteps 20
+set Phase_6.Deform.MaxLoadFractionPerStep 0.1
+set Phase_6.Deform.ToleratedError 0.001
+set Phase_7.Deform.UseDefaultIterationParams False
+set Phase_7.Deform.ArcLengthControl "Off"
+set Phase_7.Deform.MaxSteps 3000
+set Phase_7.Deform.MaxUnloadingSteps 20
+set Phase_7.Deform.MaxLoadFractionPerStep 0.1
+set Phase_7.Deform.ToleratedError 0.001
+set Phase_8.Deform.UseDefaultIterationParams False
+set Phase_8.Deform.ArcLengthControl "Off"
+set Phase_8.Deform.MaxSteps 3000
+set Phase_8.Deform.MaxUnloadingSteps 20
+set Phase_8.Deform.MaxLoadFractionPerStep 0.1
+set Phase_8.Deform.ToleratedError 0.001
+set Phase_9.Deform.UseDefaultIterationParams False
+set Phase_9.Deform.ArcLengthControl "Off"
+set Phase_9.Deform.MaxSteps 3000
+set Phase_9.Deform.MaxUnloadingSteps 20
+set Phase_9.Deform.MaxLoadFractionPerStep 0.1
+set Phase_9.Deform.ToleratedError 0.001
+set Phase_10.Deform.UseDefaultIterationParams False
+set Phase_10.Deform.ArcLengthControl "Off"
+set Phase_10.Deform.MaxSteps 3000
+set Phase_10.Deform.MaxUnloadingSteps 20
+set Phase_10.Deform.MaxLoadFractionPerStep 0.1
+set Phase_10.Deform.ToleratedError 0.001
+set Phase_11.Deform.UseDefaultIterationParams False
+set Phase_11.Deform.ArcLengthControl "Off"
+set Phase_11.Deform.MaxSteps 3000
+set Phase_11.Deform.MaxUnloadingSteps 20
+set Phase_11.Deform.MaxLoadFractionPerStep 0.1
+set Phase_11.Deform.ToleratedError 0.001
+set Phase_12.Deform.UseDefaultIterationParams False
+set Phase_12.Deform.ArcLengthControl "Off"
+set Phase_12.Deform.MaxSteps 3000
+set Phase_12.Deform.MaxUnloadingSteps 20
+set Phase_12.Deform.MaxLoadFractionPerStep 0.1
+set Phase_12.Deform.ToleratedError 0.001
+set Phase_13.Deform.UseDefaultIterationParams False
+set Phase_13.Deform.ArcLengthControl "Off"
+set Phase_13.Deform.MaxSteps 3000
+set Phase_13.Deform.MaxUnloadingSteps 20
+set Phase_13.Deform.MaxLoadFractionPerStep 0.1
+set Phase_13.Deform.ToleratedError 0.001
+set Phase_14.Deform.UseDefaultIterationParams False
+set Phase_14.Deform.ArcLengthControl "Off"
+set Phase_14.Deform.MaxSteps 3000
+set Phase_14.Deform.MaxUnloadingSteps 20
+set Phase_14.Deform.MaxLoadFractionPerStep 0.1
+set Phase_14.Deform.ToleratedError 0.001
+set Phase_15.Deform.UseDefaultIterationParams False
+set Phase_15.Deform.ArcLengthControl "Off"
+set Phase_15.Deform.MaxSteps 3000
+set Phase_15.Deform.MaxUnloadingSteps 20
+set Phase_15.Deform.MaxLoadFractionPerStep 0.1
+set Phase_15.Deform.ToleratedError 0.001
+set Phase_16.Deform.UseDefaultIterationParams False
+set Phase_16.Deform.ArcLengthControl "Off"
+set Phase_16.Deform.MaxSteps 3000
+set Phase_16.Deform.MaxUnloadingSteps 20
+set Phase_16.Deform.MaxLoadFractionPerStep 0.1
+set Phase_16.Deform.ToleratedError 0.001
+set Phase_17.Deform.UseDefaultIterationParams False
+set Phase_17.Deform.ArcLengthControl "Off"
+set Phase_17.Deform.MaxSteps 3000
+set Phase_17.Deform.MaxUnloadingSteps 20
+set Phase_17.Deform.MaxLoadFractionPerStep 0.1
+set Phase_17.Deform.ToleratedError 0.001
+save
+# ── 7. Curve points（貼進 Output 的 Commands runner；在 Input 執行到這裡會停下）──
+# Staged construction 按「Select points for curves」開 Output 後貼本節；acp 取最近節點
+selectmeshpoints
+# Output 會回報實際節點座標，請與註解的座標核對（差 > 0.1 m 請回報）
+
+# 01 PH_CROWN：主廠房拱頂（x 0、Y -288.3）
+acp "Node" 0 -288.3
+# 02 PH_CROWN_REF：拱頂上方 25 m 參考點（x 0、Y -263.3）
+acp "Node" 0 -263.3
+# 03 PH_FLOOR：主廠房底板中央（x 0、Y -337.8）
+acp "Node" 0 -337.8
+# 04 PH_FLOOR_REF：底板下方 25 m 參考點（x 0、Y -362.8）
+acp "Node" 0 -362.8
+# 05 PH_WALL_L：主廠房左牆 EL.886.4（x -12.7、Y -316.6）
+acp "Node" -12.7 -316.6
+# 06 PH_WALL_R：主廠房右牆（岩柱側）EL.886.4（x 12.7、Y -316.6）
+acp "Node" 12.7 -316.6
+# 07 TR_WALL_L：主變室左牆（岩柱側）EL.893.8（x 42.7、Y -309.2）
+acp "Node" 42.7 -309.2
+# 08 TR_WALL_R：主變室右牆 EL.893.8（x 60.5、Y -309.2）
+acp "Node" 60.5 -309.2
+# 09 TR_CROWN：主變室拱頂（補充）（x 51.6、Y -298.7）
+acp "Node" 51.6 -298.7
+# 10 TR_FLOOR：主變室底板中央（補充）（x 51.6、Y -319.6）
+acp "Node" 51.6 -319.6
+# 11 PILLAR_MID：岩柱中心 EL.892.5（補充）（x 27.7、Y -310.5）
+acp "Node" 27.7 -310.5
+update
+# ── 8. 計算並存檔（回 Input 後拿掉下兩行的 # 再執行；或直接按 Calculate）──
+# calculate
+# save

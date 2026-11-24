@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PM4Sand 組成律 · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+#lab .ctrl[hidden] { display: none; }
+.lab-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; margin-top: 8px; }
+@media (max-width: 760px) { .lab-grid { grid-template-columns: minmax(0, 1fr); } }
+.lab-cell { background: var(--inset); border-radius: 16px; padding: 12px 14px 8px; min-width: 0; }
+.lab-cell h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.lab-cell canvas { width: 100%; display: block; aspect-ratio: 4 / 3; }
+.lab-cell.sq canvas { aspect-ratio: 4 / 3; }
+.preset-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.preset-row .btn { font-size: 13.5px; }
+.timeline { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; flex-wrap: wrap; }
+.timeline input[type=range] { flex: 1; min-width: 200px; accent-color: var(--accent); }
+.timeline .tl-read { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 9em; text-align: right; }
+.seg { display: inline-flex; background: var(--inset); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 5px 13px; font: inherit; font-size: 13.5px; color: var(--ink); border-radius: 8px; cursor: pointer; }
+.seg button[aria-pressed=true] { background: var(--tile); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }
+.ctrl-group { margin: 6px 0 10px; }
+.ctrl-group > .gt { font-size: 12.5px; font-weight: 600; color: var(--orange); letter-spacing: .02em; margin: 10px 0 6px; }
+details.more { margin: 4px 0 8px; }
+details.more > summary { cursor: pointer; font-size: 13.5px; color: var(--link); padding: 4px 0; }
+.mode-chip { display: inline-block; padding: 1px 10px; border-radius: 980px; font-size: 13px; font-weight: 600; }
+.mode-contraction { background: var(--warn-soft); color: var(--warn); }
+.mode-dilation { background: var(--accent-soft); color: var(--accent); }
+.mode-elastic { background: var(--chip); color: var(--muted); }
+.legend-line { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin: 2px 0 4px; }
+.legend-line i { display: inline-block; width: 20px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+.legend-line i.dash { border-top-style: dashed; }
+.calc-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .calc-row { grid-template-columns: minmax(0, 1fr); } }
+.calc-row canvas { width: 100%; aspect-ratio: 4 / 3; display: block; background: var(--inset); border-radius: 16px; }
+.crr-input { width: 100%; border: 0; background: var(--inset); color: var(--ink); border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 14px; }
+.tbl-compact td, .tbl-compact th { padding: 7px 10px; font-size: 14px; }
+.shot-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot-row figure.shot { margin: 0; }
+.eqlabel { font-size: 13px; color: var(--muted); margin: -.4em 0 .8em; }
+</style>
+</head>
+<body data-page="ch6" data-root="" data-title="6 · PM4Sand">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 6</div>
+  <h1>Material Model – PM4Sand</h1>
+  <p class="lede"><b>PM4Sand 用「應力比」描述砂土：四個面隨相對密度與圍壓移動，收縮造成孔隙水壓上升，剪脹與組構（fabric）讓液化後的剪應變一圈一圈累積。</b>參數只有十多個，最重要的 DR0、G0、hp0 三個；其中 hp0 要用循環單剪對液化阻抗曲線率定。</p>
+  <div class="callout question"><div class="ct">這一章要回答</div><p>PM4Sand 怎麼由應變算出應力？為什麼不排水循環剪會液化？hp0 要怎麼率定、在 PLAXIS 裡怎麼用？</p></div>
+</header>
+
+<section class="sec" id="s1" data-num="6.1" data-short="模型概念與適用範圍">
+  <div class="sec-head"><span class="sec-num">6.1</span><h2>模型概念與適用範圍</h2></div>
+  <p>PM4Sand 是<b>應力比控制、與臨界狀態相容的邊界面塑性模型</b>，以 Dafalias–Manzari 的砂土模型為骨架，為地震液化分析加上許多修改：讓液化阻抗曲線的斜率、圍壓效應（Kσ）、靜偏剪效應（Kα）、液化後的剪應變累積與震後再壓密都更接近工程經驗。</p>
+  <div class="grid2">
+    <div class="card"><h4>和 Mohr-Coulomb 的差別</h4><p>MC 在降伏面內是線彈性，循環載重下不會累積孔隙水壓。PM4Sand 的降伏面是應力比空間中的一個小錐，幾乎一受剪就產生塑性體積應變；不排水時體積不能變，塑性收縮只能由有效應力下降來抵銷，孔隙水壓就一圈一圈上升。</p></div>
+    <div class="card"><h4>只能用於 2D 平面應變</h4><p>模型以平面內的三個應力分量（σ′xx、σ′yy、τxy）定義，平均有效應力取 p = (σ′xx + σ′yy)／2。平面外的 σ′zz 只用線彈性另外算，不參與模型行為。PLAXIS 的 SoilTest 也因此只能做 DSS 與 CDSS。</p></div>
+    <div class="card"><h4>靠狀態變數記住歷史</h4><p>除了應力，還要記背應力比 α、上次反轉點 αin、組構張量 z 與它的累積量 zcum 等約 30 個狀態變數。PLAXIS 在第一個使用 PM4Sand 的階段開始時初始化，並記下 σ′v0 作為 ru 的分母。</p></div>
+    <div class="card"><h4>適合與不適合</h4><p>適合：地震時砂土的孔隙水壓上升、液化、液化後的側向流動與沉陷。不適合：靜態施工階段的變形（靜態行為較不準），所以重力、施工階段要先用其他組成律，到動力階段才換成 PM4Sand。</p></div>
+  </div>
+</section>
+
+<section class="sec" id="s2" data-num="6.2" data-short="臨界狀態與 ξR">
+  <div class="sec-head"><span class="sec-num">6.2</span><h2>臨界狀態與相對狀態指數 ξR</h2></div>
+  <p>砂土會收縮還是剪脹，取決於它比臨界狀態「密」還是「鬆」。PM4Sand 用相對密度來量這個差距：同一個平均有效應力 p 下，臨界狀態線對應一個相對密度 D<sub>R,cs</sub>，目前的 D<sub>R</sub> 與它的差就是相對狀態指數 ξR。</p>
+  <div class="eqbox">
+  $$\xi_R = D_{R,cs} - D_R,\qquad D_{R,cs} = \frac{R}{Q - \ln\!\left(100\,p/p_A\right)}$$
+  </div>
+  <ul>
+    <li><b>ξR &lt; 0</b>：比臨界狀態密，剪動時傾向剪脹；<b>ξR &gt; 0</b>：比臨界狀態鬆，傾向收縮。</li>
+    <li>D<sub>R,cs</sub> 隨 p 增加而增加：同一個砂，圍壓越大越「鬆」，剪脹性越弱，這就是 Kσ 效應的來源。</li>
+    <li>Q、R 是臨界狀態線參數，預設 10、1.5（R 由石英砂常用的 1.0 提高到 1.5，讓臨界狀態線較低，較符合單剪結果）。</li>
+    <li>排水剪動時體積改變會更新 D<sub>R</sub>；不排水時 D<sub>R</sub> 不變，ξR 只隨 p 變。</li>
+  </ul>
+  <div class="widget" id="wState">
+    <div class="w-head"><span class="tag">互動 · 狀態計算器</span><div class="wt">輸入 Dr、σ′v0、K0，看 ξR 與各個面的大小</div></div>
+    <div class="w-body">
+      <div class="controls">
+        <div class="ctrl"><label for="cDr">D<sub>R</sub></label><input type="range" id="cDr" min="0.2" max="0.95" step="0.01" value="0.55"><output id="oDr"></output></div>
+        <div class="ctrl"><label for="cSv">σ′v0 (kPa)</label><input type="range" id="cSv" min="10" max="400" step="5" value="100"><output id="oSv"></output></div>
+        <div class="ctrl"><label for="cK0">K0</label><input type="range" id="cK0" min="0.3" max="1.0" step="0.01" value="0.5"><output id="oK0"></output></div>
+        <div class="ctrl"><label for="cPhi">φcv (°)</label><input type="range" id="cPhi" min="25" max="38" step="0.5" value="33"><output id="oPhi"></output></div>
+      </div>
+      <div class="calc-row">
+        <div>
+          <canvas id="cslCanvas"></canvas>
+          <div class="legend-line"><span><i style="border-color:var(--ink)"></i>臨界狀態線 D<sub>R,cs</sub>(p)</span><span><i class="dash" style="border-color:var(--blue)"></i>目前 D<sub>R</sub></span><span><i style="border-color:var(--red)"></i>ξR</span></div>
+        </div>
+        <div>
+          <div class="stats" id="stateStats" style="margin-top:0"></div>
+          <p class="w-note">p 取平面內平均：p = σ′v0(1 + K0)／2。h0、ce、Ckaf、Ado、zmax 是模型內部依 D<sub>R</sub> 或初始狀態算出的值，PLAXIS 中不能輸入。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s3" data-num="6.3" data-short="四個面">
+  <div class="sec-head"><span class="sec-num">6.3</span><h2>應力比空間中的四個面</h2></div>
+  <p>PM4Sand 只看<b>應力比</b> r = s／p（s 為偏應力），不直接看應力大小。平面應變下的偏應力只有兩個獨立分量，所以 r 可以畫在一個平面上：橫軸 r<sub>yy</sub> = (σ′yy − σ′xx)／(σ′xx + σ′yy)，縱軸 r<sub>xy</sub> = τxy／p。在這個平面上，各個「面」都是以原點為圓心的圓：</p>
+  <div class="pair pair2">
+    <div class="pt">
+      <div class="tablewrap"><table class="data tbl-compact">
+        <tr><th>面</th><th>應力比</th><th>作用</th></tr>
+        <tr><td><b>降伏面</b></td><td>半徑 m／2，m = 0.01</td><td>很小的圓，圓心是背應力比 α；應力比在圓內為彈性</td></tr>
+        <tr><td><b>剪脹面</b></td><td>M<sup>d</sup> = M·e<sup>nd·ξR</sup></td><td>α 在它以內收縮、以外剪脹（相變線）</td></tr>
+        <tr><td><b>臨界狀態面</b></td><td>M = 2 sin φcv</td><td>剪到臨界狀態時 ξR → 0，M<sup>b</sup>、M<sup>d</sup> 都趨近 M</td></tr>
+        <tr><td><b>邊界面</b></td><td>M<sup>b</sup> = M·e<sup>−nb·ξR</sup></td><td>應力比的上限，控制峰值強度與塑性模數</td></tr>
+      </table></div>
+      <p>比臨界狀態鬆（ξR &gt; 0）時，nb 改用 nb／4、nd 改用 4·nd。圓的半徑寫成 M／2，是因為 τ／p = sin φ 時 M = 2 sin φ。</p>
+      <p>由目前的 α 沿降伏面法向 n 延伸，在邊界面與剪脹面上得到兩個「影像點」：</p>
+      $$\mathbf n = \frac{\mathbf r - \boldsymbol\alpha}{m/\sqrt2}$$
+      $$\boldsymbol{\alpha}^b = \tfrac{1}{\sqrt2}\left(M^b - m\right)\mathbf n,\qquad \boldsymbol{\alpha}^d = \tfrac{1}{\sqrt2}\left(M^d - m\right)\mathbf n$$
+      <p>α 到 α<sup>b</sup> 的距離決定塑性模數 K<sub>p</sub>（越近越軟），α 到 α<sup>d</sup> 的距離決定剪脹量 D 的正負與大小。</p>
+    </div>
+    <div class="pv">
+      <figure class="diagram">
+        <svg viewBox="0 0 420 420" width="420" role="img" aria-label="應力比平面上的降伏面、剪脹面、臨界狀態面與邊界面">
+          <defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink)"/></marker></defs>
+          <line x1="20" y1="210" x2="400" y2="210" class="guide"/><line x1="210" y1="20" x2="210" y2="400" class="guide"/>
+          <circle cx="210" cy="210" r="165" fill="none" class="s-red" stroke-width="1.6"/>
+          <circle cx="210" cy="210" r="128" fill="none" class="s-gray" stroke-width="1.4" stroke-dasharray="6 4"/>
+          <circle cx="210" cy="210" r="104" fill="none" class="s-blue" stroke-width="1.6"/>
+          <line x1="210" y1="210" x2="301" y2="117" class="s-ink" stroke-width="1.2" marker-end="url(#arw)"/>
+          <circle cx="262" cy="160" r="9" fill="none" class="s-ink" stroke-width="1.6"/>
+          <circle cx="262" cy="160" r="2.5" class="f-ink"/>
+          <circle cx="281.5" cy="137" r="3.5" class="f-blue"/>
+          <circle cx="325" cy="92" r="3.5" class="f-red"/>
+          <text x="247" y="182" class="txt">α</text>
+          <text x="256" y="130" class="txt-blue">α<tspan dy="-6" font-size="10">d</tspan></text>
+          <text x="333" y="88" class="txt-red">α<tspan dy="-6" font-size="10">b</tspan></text>
+          <text x="275" y="172" class="txt-muted">n</text>
+          <text x="330" y="370" class="txt-red">邊界面 M<tspan dy="-6" font-size="10">b</tspan></text>
+          <text x="232" y="355" class="txt-muted">臨界 M</text>
+          <text x="160" y="276" class="txt-blue">剪脹面 M<tspan dy="-6" font-size="10">d</tspan></text>
+          <text x="386" y="226" class="txt-muted">r<tspan dy="4" font-size="10">yy</tspan></text>
+          <text x="216" y="32" class="txt-muted">r<tspan dy="4" font-size="10">xy</tspan></text>
+        </svg>
+        <figcaption>密砂（ξR &lt; 0）的情形：M<sup>d</sup> &lt; M &lt; M<sup>b</sup>。降伏面（黑色小圓）放大畫出，實際半徑只有 0.005。</figcaption>
+      </figure>
+    </div>
+  </div>
+  <div class="callout intuition"><div class="ct">一句話記住</div><p>降伏面很小，所以 α 幾乎就等於目前的應力比 r。判斷收縮或剪脹，只要看目前的應力比在剪脹面（藍圈）裡面還是外面；離邊界面（紅圈）越近，同樣的應力增量產生越大的塑性應變。</p></div>
+</section>
+
+<section class="sec" id="s4" data-num="6.4" data-short="彈性與塑性模數">
+  <div class="sec-head"><span class="sec-num">6.4</span><h2>彈性勁度、塑性模數與應力增量</h2></div>
+  <h3>彈性勁度</h3>
+  $$G = G_0\,p_A\sqrt{\frac{p}{p_A}}\;C_{SR}\;\frac{1 + z_{cum}/z_{max}}{1 + C_{GD}\,z_{cum}/z_{max}},\qquad K = \frac{2(1+\nu)}{3(1-2\nu)}\,G$$
+  <ul>
+    <li>G 隨 √p 增加，G0 是無因次係數；有剪力波速時以 G = ρV<sub>s</sub>² 率定，沒有時可用 G0 = 167√(46 D<sub>R</sub>² + 2.5)。</li>
+    <li>C<sub>SR</sub>：應力比越接近邊界面，G 越低。</li>
+    <li>組構累積（z<sub>cum</sub>）後 G 會衰減，最多降到 1／C<sub>GD</sub>（C<sub>GD</sub> = 2）。</li>
+  </ul>
+  <h3>塑性流動與載重指標 L</h3>
+  <p>塑性應變分成偏量與體積兩部分，方向由 n 決定，體積部分的比例就是剪脹率 D（正為收縮、負為剪脹）：</p>
+  $$d\boldsymbol\varepsilon^p_q = \langle L\rangle\,\mathbf n,\qquad d\varepsilon^p_v = \langle L\rangle\,D$$
+  $$d\boldsymbol\sigma = 2G\left(d\mathbf e - \langle L\rangle\mathbf n\right) + K\left(d\varepsilon_v - \langle L\rangle D\right)\mathbf I,\qquad L = \frac{2G\,\mathbf n : d\mathbf e - \mathbf n:\mathbf r\,K\,d\varepsilon_v}{K_p + 2G - K D\,\mathbf n:\mathbf r}$$
+  <p class="eqlabel">⟨ ⟩ 為 Macaulay 括號（負值取 0）。L 由「應力增量後仍在降伏面上」的一致性條件解出。</p>
+  <h3>塑性模數 K<sub>p</sub> 與反轉點 α<sub>in</sub></h3>
+  $$d\boldsymbol\alpha = \tfrac23\langle L\rangle\,h\,(\boldsymbol\alpha^b - \boldsymbol\alpha),\qquad K_p = G\,h_0\,\frac{\sqrt{\langle(\boldsymbol\alpha^b - \boldsymbol\alpha):\mathbf n\rangle}}{\exp\!\left[(\boldsymbol\alpha - \boldsymbol\alpha_{in}):\mathbf n\right] - 1 + C_{\gamma1}}\cdot\frac{C_{k\alpha}}{1 + C_{Kp}(\cdots)}$$
+  <ul>
+    <li><b>正比於 α 到邊界面的距離</b>：應力比接近邊界面時 K<sub>p</sub> → 0，塑性應變變大（接近峰值）。</li>
+    <li><b>反比於 α 到 α<sub>in</sub> 的距離</b>：載重方向反轉時（(α − α<sub>in</sub>):n &lt; 0）把 α<sub>in</sub> 更新為目前的 α，分母只剩 C<sub>γ1</sub> = h0／200，K<sub>p</sub> 很大 → 反轉瞬間幾乎是彈性，遲滯圈因此有尖角。</li>
+    <li>h0 = max(0.3, (0.25 + D<sub>R</sub>)／2) 調整塑性與彈性模數的比例，影響割線模數與阻尼。</li>
+    <li>C<sub>kα</sub> 含 Ckaf，在有靜偏剪、組構已形成時放大 K<sub>p</sub>，用來反映 Kα 效應。</li>
+  </ul>
+</section>
+
+<section class="sec" id="s5" data-num="6.5" data-short="收縮、剪脹與 fabric">
+  <div class="sec-head"><span class="sec-num">6.5</span><h2>收縮、剪脹與組構（fabric）</h2></div>
+  <div class="grid2">
+    <div class="card"><h4>剪脹：(α<sup>d</sup> − α):n &lt; 0</h4>
+      $$D = A_d\,(\boldsymbol\alpha^d - \boldsymbol\alpha):\mathbf n \;<\; 0$$
+      <p>A<sub>do</sub> 由 Bolton 的剪脹關係在初始狀態算出：A<sub>do</sub> = 2.5[asin(M<sup>b</sup>／2) − asin(M／2)]／(M<sup>b</sup> − M<sup>d</sup>)。液化後組構累積，A<sub>d</sub> 會被打折，剪脹變弱，剪應變因此逐圈變大。</p></div>
+    <div class="card"><h4>收縮：(α<sup>d</sup> − α):n ≥ 0</h4>
+      $$D = A_{dc}\left[(\boldsymbol\alpha - \boldsymbol\alpha_{in}):\mathbf n + C_{in}\right]^2\frac{(\boldsymbol\alpha^d - \boldsymbol\alpha):\mathbf n}{(\boldsymbol\alpha^d - \boldsymbol\alpha):\mathbf n + C_D}$$
+      <p>收縮量隨「離上次反轉點多遠」的平方增加；C<sub>D</sub> = 0.16 讓應力比接近剪脹面時收縮漸減為 0。</p></div>
+  </div>
+  <h3>hp0：唯一用來率定液化阻抗的參數</h3>
+  $$A_{dc} = \frac{A_{do}\left(1 + \langle\mathbf z:\mathbf n\rangle\right)}{h_p\,C_{dz}},\qquad h_p = h_{p0}\exp\!\left(-0.7 + 7\,\langle 0.5 - \xi_R\rangle^2\right)$$
+  <div class="tablewrap"><table class="data tbl-compact">
+    <tr><th>hp0</th><th>每圈收縮</th><th>孔隙水壓累積</th><th>達 γ = 3% 的 N</th><th>液化阻抗 CRR</th></tr>
+    <tr><td><b>越大</b></td><td>越少</td><td>越慢</td><td>越多</td><td>越高</td></tr>
+    <tr><td><b>越小</b></td><td>越多</td><td>越快</td><td>越少</td><td>越低</td></tr>
+  </table></div>
+  <ul>
+    <li>hp 透過 ξR 隨密度與圍壓變化：越密（ξR 越負）hp 越大、收縮越少；圍壓越大 ξR 越大、hp 越小，液化阻抗比（CRR）下降，即 Kσ 效應。</li>
+    <li>hp0 只把整條 CRR–N 曲線上下平移，<b>改變不了曲線的斜率</b>。</li>
+  </ul>
+  <h3>組構張量 z</h3>
+  $$d\mathbf z = -\frac{c_z}{1 + \left\langle \dfrac{z_{cum}}{2z_{max}} - 1\right\rangle}\,\langle L\rangle\left(\sqrt2\,z_{max}\,\mathbf n + \mathbf z\right)\quad(\text{只在剪脹時})$$
+  <ul>
+    <li>z 只在剪脹時成長，方向與剪動方向相反，上限由 z<sub>max</sub> = min(0.7 e<sup>−6.1 ξR0</sup>, 20) 控制，c<sub>z</sub> = 250 是成長速率。</li>
+    <li>應力反轉後 z:n 變成正值，收縮項的 (1 + ⟨z:n⟩) 與 C<sub>in</sub> 都放大，<b>反轉後立刻大量收縮</b>，有效應力急速下降——液化後「蝴蝶形」應力路徑就是這樣來的。</li>
+    <li>z<sub>cum</sub> 累積後，剪脹被打折（A<sub>d</sub> 變小）、G 衰減，剪應變每圈多一點，不會鎖在同一個迴圈。下面的互動實驗室可以把 fabric 關掉比較。</li>
+  </ul>
+</section>
+
+<section class="sec" id="s6" data-num="6.6" data-short="互動：PM4Sand 單剪實驗室">
+  <div class="sec-head"><span class="sec-num">6.6</span><h2>互動：PM4Sand 單剪實驗室</h2></div>
+  <p>下面在瀏覽器裡直接積分 PM4Sand 的應變–應力關係，模擬一個材料點的單剪試驗（DSS）：先在 σ′v0、K0 下固結，再以應變控制推動剪應變。不排水以「定體積」近似（σ′v 的下降就是孔隙水壓上升）；循環試驗在 τ 到達 ±CSR·σ′v0 時反向，與 PLAXIS SoilTest 的 CDSS 相同。</p>
+  <div class="widget" id="lab">
+    <div class="w-head"><span class="tag">互動 · 單一材料點</span><div class="wt">PM4Sand Simple-Shear Lab</div></div>
+    <div class="w-body">
+      <div class="preset-row" id="presets">
+        <button class="btn" data-p="cyc55">循環液化：Dr 55%、CSR 0.15</button>
+        <button class="btn" data-p="cyc55nf">同上，關掉 fabric</button>
+        <button class="btn" data-p="cyc35">鬆砂 Dr 35%、CSR 0.10</button>
+        <button class="btn" data-p="cyc75">密砂 Dr 75%、CSR 0.30</button>
+        <button class="btn" data-p="leap">Ottawa F-65（σ′v 40 kPa）</button>
+        <button class="btn" data-p="leapA">同上，靜偏剪 α = 0.25</button>
+        <button class="btn" data-p="dDense">排水單調：密砂</button>
+        <button class="btn" data-p="uLoose">不排水單調：鬆砂</button>
+      </div>
+      <div class="ctrl-group">
+        <div class="btnrow"><span class="lbl">試驗</span>
+          <span class="seg" id="testSeg"><button data-v="cyc" aria-pressed="true">不排水循環 DSS</button><button data-v="mu" aria-pressed="false">不排水單調 DSS</button><button data-v="md" aria-pressed="false">排水單調 DSS</button></span>
+          <span class="lbl" style="margin-left:14px">Fabric</span>
+          <span class="seg" id="fabSeg"><button data-v="1" aria-pressed="true">On</button><button data-v="0" aria-pressed="false">Off</button></span>
+        </div>
+        <div class="gt">主要參數與試驗條件</div>
+        <div class="controls">
+          <div class="ctrl"><label for="pDr">D<sub>R0</sub></label><input type="range" id="pDr" min="0.25" max="0.95" step="0.001" value="0.55"><output for="pDr"></output></div>
+          <div class="ctrl"><label for="pG0">G0</label><input type="number" id="pG0" min="50" max="2000" step="1" value="677"></div>
+          <div class="ctrl"><label for="pHp">hp0</label><input type="number" id="pHp" min="0.005" max="5" step="0.005" value="0.40"></div>
+          <div class="ctrl"><label for="pSv">σ′v0 (kPa)</label><input type="number" id="pSv" min="10" max="800" step="5" value="100"></div>
+          <div class="ctrl"><label for="pK0">K0</label><input type="number" id="pK0" min="0.3" max="1.2" step="0.01" value="0.5"></div>
+          <div class="ctrl cyc-only"><label for="pCsr">CSR</label><input type="number" id="pCsr" min="0.03" max="0.6" step="0.005" value="0.15"></div>
+          <div class="ctrl cyc-only"><label for="pAl">靜偏剪 α</label><input type="number" id="pAl" min="0" max="0.4" step="0.01" value="0"></div>
+          <div class="ctrl cyc-only"><label for="pN">最多循環數</label><input type="number" id="pN" min="1" max="200" step="1" value="40"></div>
+          <div class="ctrl mono-only" hidden><label for="pGm">γ 最大 (%)</label><input type="number" id="pGm" min="1" max="20" step="1" value="10"></div>
+        </div>
+        <details class="more"><summary>次要參數（PLAXIS 可輸入，預設值）</summary>
+          <div class="controls" style="margin-top:8px">
+            <div class="ctrl"><label for="pEmax">emax</label><input type="number" id="pEmax" step="0.01" value="0.8"></div>
+            <div class="ctrl"><label for="pEmin">emin</label><input type="number" id="pEmin" step="0.01" value="0.5"></div>
+            <div class="ctrl"><label for="pNb">nb</label><input type="number" id="pNb" step="0.05" value="0.5"></div>
+            <div class="ctrl"><label for="pNd">nd</label><input type="number" id="pNd" step="0.01" value="0.1"></div>
+            <div class="ctrl"><label for="pPhi">φcv (°)</label><input type="number" id="pPhi" step="0.5" value="33"></div>
+            <div class="ctrl"><label for="pNu">ν</label><input type="number" id="pNu" step="0.01" value="0.3"></div>
+            <div class="ctrl"><label for="pQ">Q</label><input type="number" id="pQ" step="0.5" value="10"></div>
+            <div class="ctrl"><label for="pR">R</label><input type="number" id="pR" step="0.1" value="1.5"></div>
+          </div>
+          <div class="btnrow"><button class="btn" id="g0Sug" type="button">G0 用 167√(46D<sub>R</sub>² + 2.5) 估計</button></div>
+        </details>
+        <div class="btnrow"><button class="btn primary" id="runBtn" type="button">執行模擬</button><span class="lbl" id="runMsg"></span></div>
+      </div>
+
+      <div class="stats" id="labDiag"></div>
+
+      <div class="timeline">
+        <button class="btn" id="playBtn" type="button">播放</button>
+        <select id="speed" class="btn" aria-label="播放速度"><option value="1">慢</option><option value="3" selected>中</option><option value="8">快</option></select>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="時間軸">
+        <span class="tl-read" id="tlRead"></span>
+      </div>
+
+      <div class="lab-grid">
+        <div class="lab-cell"><h4 id="h1">應力路徑 τ–σ′v</h4><canvas id="cv1"></canvas></div>
+        <div class="lab-cell"><h4 id="h2">應力–應變 τ–γ</h4><canvas id="cv2"></canvas></div>
+        <div class="lab-cell"><h4 id="h3">超額孔隙水壓比 ru–N</h4><canvas id="cv3"></canvas></div>
+        <div class="lab-cell sq"><h4>應力比平面 r<sub>yy</sub>–r<sub>xy</sub>（此刻的四個面）</h4><canvas id="cv4"></canvas>
+          <div class="legend-line"><span><i style="border-color:var(--red)"></i>邊界面 M<sup>b</sup></span><span><i class="dash" style="border-color:var(--gray)"></i>臨界 M</span><span><i style="border-color:var(--blue)"></i>剪脹面 M<sup>d</sup></span><span><i style="border-color:var(--ink)"></i>降伏面（放大）與 fabric z 方向</span></div>
+        </div>
+      </div>
+      <div class="stats" id="labNow"></div>
+      <p class="w-note">紅點是此刻的狀態；灰線是全程、深色線是到此刻為止的歷程。拖曳時間軸可以看每一刻的 ξR、M<sup>b</sup>、M<sup>d</sup> 與收縮／剪脹狀態。p 下限取 p<sub>A</sub>／200。</p>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h4>看應力路徑</h4><p>前幾圈 σ′v 每圈往左移一點（收縮 → 孔壓上升）。接近液化時，路徑在剪脹面外往右上爬（剪脹使 σ′v 回升），反轉後又因 fabric 大量收縮、σ′v 掉回接近 0，形成蝴蝶形。</p></div>
+    <div class="card"><h4>看遲滯圈</h4><p>液化前迴圈窄、勁度高；ru 接近 1 後出現「香蕉形」迴圈：τ 接近 0 時剪應變大幅滑動，到剪脹段才重新變硬。每圈的剪應變振幅逐漸變大，直到 3% 判定液化。</p></div>
+    <div class="card"><h4>把 fabric 關掉</h4><p>同樣的參數關掉 fabric，孔壓仍會上升，但液化後剪脹不打折，迴圈鎖在固定的應變振幅，永遠到不了 3%——這正是加入組構項的原因。</p></div>
+    <div class="card"><h4>密砂與排水</h4><p>密砂（Dr 75%）要更大的 CSR 才會液化；排水單調 DSS 可以看到先收縮後剪脹、體積應變 εv 由正轉負，峰值後隨剪脹變弱而略降。</p></div>
+  </div>
+</section>
+
+<section class="sec" id="s7" data-num="6.7" data-short="參數總表">
+  <div class="sec-head"><span class="sec-num">6.7</span><h2>參數總表</h2></div>
+  <p>PLAXIS 的 PM4Sand 有 13 個輸入參數：主要 4 個（DR0、G0、hp0、pA）與次要 9 個。<b>13 個欄位一開始全是 0，即使採用預設值也要逐一填入。</b></p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>參數</th><th>意義</th><th class="num">預設</th><th>怎麼決定</th></tr>
+    <tr class="hl"><td><b>DR0</b></td><td>相對密度（表觀值）</td><td class="num">—</td><td>SPT：D<sub>R</sub> = √((N<sub>1</sub>)<sub>60</sub>／46)；CPT 相關式；或實驗室 Dr。可為了率定上下微調</td></tr>
+    <tr class="hl"><td><b>G0</b></td><td>剪力模數係數</td><td class="num">—</td><td>V<sub>s</sub> 量測：G = ρV<sub>s</sub>²；無 V<sub>s</sub> 時 G0 = 167√((N<sub>1</sub>)<sub>60</sub> + 2.5)</td></tr>
+    <tr class="hl"><td><b>hp0</b></td><td>收縮速率參數</td><td class="num">—</td><td>其他參數都定了才率定：CDSS 模擬對目標 CRR–N</td></tr>
+    <tr><td>pA</td><td>大氣壓（唯一有單位的參數）</td><td class="num">101.3 kPa</td><td>依分析的應力單位</td></tr>
+    <tr><td>emax、emin</td><td>最大、最小孔隙比</td><td class="num">0.8、0.5</td><td>指數性質試驗；與 DR0 同一基準</td></tr>
+    <tr><td>nb</td><td>邊界面參數</td><td class="num">0.5</td><td>排水峰值強度；Kα 不合時優先調</td></tr>
+    <tr><td>nd</td><td>剪脹面參數</td><td class="num">0.1</td><td>相變角（略小於 φcv）</td></tr>
+    <tr><td>φcv</td><td>臨界狀態摩擦角</td><td class="num">33°</td><td>大應變定體積剪力試驗</td></tr>
+    <tr><td>ν</td><td>波松比</td><td class="num">0.3</td><td>通常不改</td></tr>
+    <tr><td>Q、R</td><td>臨界狀態線參數</td><td class="num">10、1.5</td><td>非石英砂時再調整</td></tr>
+    <tr><td>PostShake</td><td>震後再壓密開關</td><td class="num">0</td><td>強震結束後的階段改用 1</td></tr>
+  </table></div>
+  <details class="derive"><summary>模型內部自動計算、PLAXIS 不能輸入的量</summary><div class="body">
+    <div class="tablewrap"><table class="data tbl-compact">
+      <tr><th>量</th><th>計算方式</th><th>作用</th></tr>
+      <tr><td>h0</td><td>max(0.3, (0.25 + D<sub>R</sub>)／2)</td><td>塑性模數比例，影響阻尼</td></tr>
+      <tr><td>ce（C<sub>ε</sub>）</td><td>D<sub>R</sub> &lt; 0.55：0.5；&gt; 0.75：0.2；其間線性</td><td>液化後剪應變累積速率</td></tr>
+      <tr><td>Ckaf</td><td>5 + 220(D<sub>R</sub> − 0.26)³，限制在 4–35</td><td>靜偏剪（Kα）效應</td></tr>
+      <tr><td>A<sub>do</sub></td><td>由初始 M<sup>b</sup>、M<sup>d</sup> 依 Bolton 剪脹關係算</td><td>剪脹率</td></tr>
+      <tr><td>z<sub>max</sub></td><td>min(0.7 e<sup>−6.1 ξR0</sup>, 20)</td><td>組構上限</td></tr>
+      <tr><td>c<sub>z</sub>、C<sub>GD</sub>、m、C<sub>D</sub></td><td>250、2.0、0.01、0.16</td><td>組構速率、勁度衰減、降伏面大小、收縮漸減</td></tr>
+      <tr><td>F<sub>sed,min</sub>、p<sub>sed0</sub></td><td>0.03 e<sup>2.6 D<sub>R</sub></sup>（≤ 0.99）、p<sub>A</sub>／5</td><td>PostShake = 1 時的模數折減下限與作用範圍</td></tr>
+    </table></div>
+  </div></details>
+</section>
+
+<section class="sec" id="s8" data-num="6.8" data-short="率定：CRR–N 與 hp0">
+  <div class="sec-head"><span class="sec-num">6.8</span><h2>率定：CRR–N 曲線與 hp0</h2></div>
+  <p>液化阻抗以<b>循環應力比 CSR 對「達到液化的循環數 N」</b>的曲線表示，液化判準是單剪剪應變單振幅 |γ| 達 3%。規模 7.5 的地震約相當於 15 個均勻循環，所以工程上常用 CRR<sub>15</sub>（N = 15 時的 CSR）。</p>
+  <ol class="steps">
+    <li><b>先定其他參數</b>：DR0、G0、emax／emin、nb、φcv 等依試驗或相關式決定。</li>
+    <li><b>決定目標</b>：有實驗室 CDSS 時用試驗的 CRR–N 點；沒有時由 SPT／CPT 液化觸發相關式取 CRR（σ′v = 100 kPa、M 7.5），其他規模以 MSF = (N<sub>M=7.5</sub>／N<sub>M</sub>)<sup>b</sup>（砂 b = 0.34）換算。</li>
+    <li><b>跑 CDSS</b>：Undrained、K0 與實際一致，幾個 CSR 各跑一次，讀出 N。</li>
+    <li><b>調 hp0</b>：hp0 越小越早液化。以二分法讓模擬的 N 與目標的比值（取對數平均）等於 1。</li>
+  </ol>
+  <div class="widget" id="crr">
+    <div class="w-head"><span class="tag">互動 · 用上面實驗室的參數</span><div class="wt">CRR–N 曲線產生器</div></div>
+    <div class="w-body">
+      <p class="w-note" id="crrPar" style="margin-top:0"></p>
+      <div class="controls">
+        <div class="ctrl" style="grid-template-columns:auto 1fr"><label for="crrList">CSR 清單</label><input class="crr-input" id="crrList" value="0.10, 0.12, 0.14, 0.17, 0.21"></div>
+        <div class="ctrl check"><input type="checkbox" id="crrRef"><label for="crrRef">疊上 PLAXIS SoilTest 結果（Ottawa F-65，Dr 0.663、σ′v 40 kPa；請先按「Ottawa F-65」預設）</label></div>
+      </div>
+      <div class="btnrow"><button class="btn primary" id="crrRun" type="button">產生 CRR–N</button><button class="btn" id="crrHp" type="button">hp0 × 0.5、× 1、× 2 一起畫</button><span class="lbl" id="crrMsg"></span></div>
+      <div class="calc-row">
+        <canvas id="crrCv"></canvas>
+        <div><div class="stats" id="crrStats" style="margin-top:0"></div><p class="w-note">以 CRR = a·N<sup>−b</sup> 在 ln N–ln CSR 上回歸，取 N = 15 得 CRR<sub>15</sub>。hp0 乘上不同倍數時，曲線主要是上下平移，斜率 b 只小幅改變。</p></div>
+      </div>
+    </div>
+  </div>
+  <h3>網頁計算核心的檢核</h3>
+  <p>本頁的積分程式與 PLAXIS SoilTest、OpenSees 的 PM4Sand 用相同參數比對（不排水循環 DSS，N 為達 γ = 3% 的循環數）：</p>
+  <div class="tablewrap"><table class="data tbl-compact">
+    <tr><th>參數組</th><th class="num">CSR</th><th class="num">對照軟體 N</th><th class="num">本頁 N</th></tr>
+    <tr><td rowspan="3">Dr 0.65、G0 240、hp0 0.05、σ′v 100、K0 0.5（PLAXIS SoilTest）</td><td class="num">0.21</td><td class="num">2.5</td><td class="num">1.7</td></tr>
+    <tr><td class="num">0.13</td><td class="num">11</td><td class="num">10.1</td></tr>
+    <tr><td class="num">0.081</td><td class="num">74.5</td><td class="num">71.6</td></tr>
+    <tr><td rowspan="3">Ottawa F-65：Dr 0.663、G0 282.8、hp0 0.0542、nb 0.7、φcv 30、σ′v 40、K0 0.43（PLAXIS SoilTest）</td><td class="num">0.2224</td><td class="num">4.7</td><td class="num">3.6</td></tr>
+    <tr><td class="num">0.1726</td><td class="num">7.8</td><td class="num">6.7</td></tr>
+    <tr><td class="num">0.1451</td><td class="num">14.2</td><td class="num">12.6</td></tr>
+    <tr><td rowspan="3">Dr 0.55、G0 677、hp0 0.40、σ′v 100（OpenSees）</td><td class="num">0.20</td><td class="num">4.7</td><td class="num">4.6</td></tr>
+    <tr><td class="num">0.13</td><td class="num">19.2</td><td class="num">18.7</td></tr>
+    <tr><td class="num">0.10</td><td class="num">54.2</td><td class="num">53.6</td></tr>
+  </table></div>
+  <p>趨勢與數量級一致，大 CSR（少於 5 圈）時本頁偏早液化約 1 圈。網頁版省略了旋轉剪脹面（Cdr）、α<sub>in</sub> 的三種追蹤與震後再壓密，只用來理解機制；正式率定仍要用 PLAXIS SoilTest。</p>
+  <h3>實例：LEAP 離心機案例的 Ottawa F-65 率定</h3>
+  <div class="grid2">
+    <div class="card"><h4>第一版（三案共用）</h4><p>DR0 0.663（實驗室）、G0 240、emax／emin 0.78／0.51、nb 0.5、φcv 33、其餘預設；SoilTest CDSS（K0 0.5、σ′v 40 kPa）掃描 hp0 0.08–0.12，定案 hp0 0.096，CRR<sub>15</sub> 0.1622（目標 0.162）。</p></div>
+    <div class="card"><h4>參數組 A（與 OpenSees 對齊）</h4><p>G0 依孔隙比外插（實驗室組 282.8）、nb 0.7、φcv 30；元素試驗 K0 改 0.43 = ν／(1 − ν)；在 N = 2、3.5、6、10、17、30 六點以圈數比的幾何平均 = 1 率定，各案 hp0 0.0525–0.1048（實驗室組 0.0542）。</p></div>
+  </div>
+  <figure class="shot"><img src="assets/img/ch6/calib_hp0.png" alt="第一版 hp0 掃描的 CRR–N 與 CRR15–hp0" loading="lazy"><figcaption>第一版：hp0 0.08–0.12 的 CRR–N（左）與 CRR15–hp0（右）。模擬曲線比實驗室陡（b ≈ 0.27–0.29 對 0.158），hp0 只能讓曲線上下平移。</figcaption></figure>
+  <figure class="shot"><img src="assets/img/ch6/calib_v3.png" alt="參數組 A 四個案例的 CRR–N" loading="lazy"><figcaption>參數組 A：四組 Dr 各自率定 hp0 後的 CRR–N（藍：目標曲線，橘：PLAXIS SoilTest）。在 N 3–10 附近交會，兩端斜率仍不同。</figcaption></figure>
+  <div class="callout pitfall"><div class="ct">率定時常踩的坑</div>
+    <ul>
+      <li><b>K0 要一致</b>：SoilTest 的 CDSS 有自己的 K0 欄位，K0 越大，液化阻抗越高；元素試驗與正式模型的初始 K0 要相同。</li>
+      <li><b>斜率對不上</b>：hp0 只能平移曲線；要改斜率只能動 nb、nd 等次要參數，而 PLAXIS 版的 ce、Ckaf 等無法輸入。</li>
+      <li><b>判準要統一</b>：N 以 |γ − γ0| 首次 ≥ 3% 判定（γ0 為循環開始時的剪應變），步與步之間線性內插。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec" id="s9" data-num="6.9" data-short="在 PLAXIS 中使用">
+  <div class="sec-head"><span class="sec-num">6.9</span><h2>在 PLAXIS 中使用</h2></div>
+  <h3>材料視窗</h3>
+  <div class="shot-row">
+    <figure class="shot"><img src="assets/img/ch6/mat_mechanical.png" alt="PM4Sand 的 Mechanical 頁籤" loading="lazy"><figcaption>Mechanical：DLL file 選 pm4sand64.dll、Model in DLL 選 PM4Sand，13 個參數依序填入</figcaption></figure>
+    <figure class="shot"><img src="assets/img/ch6/mat_general.png" alt="PM4Sand 的 General 頁籤" loading="lazy"><figcaption>General：Soil model 選 User-defined；動力分析的 Drainage type 用 Undrained (A)</figcaption></figure>
+  </div>
+  <div class="tablewrap"><table class="data tbl-compact">
+    <tr><th>頁籤</th><th>要設定的</th><th>注意</th></tr>
+    <tr><td>General</td><td>Soil model：User-defined；Drainage type；γ、e<sub>init</sub></td><td>元素試驗可用 Drained（不排水由 SoilTest 控制）；動力分析用 Undrained (A)</td></tr>
+    <tr><td>Mechanical</td><td>DLL file、Model in DLL、User1–User13</td><td>pm4sand64.dll 要放在安裝目錄的 udsm 子資料夾；超額孔壓用 ν-undrained（ν<sub>u</sub> 0.495）</td></tr>
+    <tr><td>Groundwater</td><td>k<sub>x</sub>、k<sub>y</sub></td><td>Dynamic with consolidation 才用到</td></tr>
+    <tr><td>Interfaces</td><td>E<sub>oed,ref</sub>、c、φ 等</td><td>沒有介面也要填非 0 值，否則材料判定無效、無法計算</td></tr>
+    <tr><td>Initial</td><td>K0 determination</td><td>只在初始階段用 K0 procedure 時有效</td></tr>
+  </table></div>
+  <p>用 Python 建材料時，13 個參數的屬性名稱是 <code>User1</code>～<code>User13</code>，順序與視窗相同：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python（PLAXIS remote scripting）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">ORDER = ['DR0', 'G0', 'hp0', 'pA', 'emax', 'emin', 'nb', 'nd', 'phicv', 'nu', 'Q', 'R', 'PostShake']
+vals = dict(DR0=0.663, G0=282.8, hp0=0.0542, pA=101.3, emax=0.78, emin=0.51,
+            nb=0.7, nd=0.1, phicv=30, nu=0.3, Q=10, R=1.5, PostShake=0)
+
+m = g_i.soilmat('Identification', 'F65_PM4S')
+m.SoilModel = 'User-defined'            # 列舉值 100
+m.DllFile = 'pm4sand64.dll'
+m.ModelInDll = 'PM4Sand'                # 選了 DLL 之後才有這個屬性
+for i, key in enumerate(ORDER, 1):
+    setattr(m, f'User{i}', vals[key])
+m.DrainageType = 'Undrained (A)'
+m.EoedInter, m.UDPowerInter, m.UDPRefInter, m.PhiInter = 8.5e4, 0.5, 100, 30   # 沒有介面也不能是 0</code></pre></div>
+  <h3>SoilTest：CDSS</h3>
+  <div class="pair pair2">
+    <div class="pt">
+      <ul>
+        <li>Type of test：<b>Undrained</b>；Consolidation：<b>K0</b>，填與模型一致的值。</li>
+        <li>Initial effective stress |σ′yy|＝σ′v0；Initial static shear σxy＝α·σ′v0。</li>
+        <li>Number of cycles 只決定最多跑幾圈；每 1/4 循環 100 步。</li>
+        <li>Test control：<b>Stress</b>；Shear stress amplitude Δσxy＝CSR·σ′v0。</li>
+        <li>結果看 τ–γ、σ′yy–τ；ru = 1 − σ′yy／σ′yy0。</li>
+      </ul>
+    </div>
+    <div class="pv"><figure class="shot"><img src="assets/img/ch6/soiltest_cdss.png" alt="SoilTest CDSS 頁籤設定" loading="lazy"><figcaption>CDSS 頁籤：σ′v0 40 kPa、CSR 0.15（Δσxy 6 kPa）、K0 0.5</figcaption></figure></div>
+  </div>
+  <h3>計算階段的安排</h3>
+  <ol class="steps">
+    <li><b>Initial phase（重力或 K0 procedure）</b>：用其他組成律（例如 MC，ν 0.3 使 K0 = 0.43 與元素試驗一致）建立初始應力。</li>
+    <li><b>換材料的 nil-step（Plastic）</b>：不加載重，只把砂層換成 PM4Sand，讓它依目前應力初始化狀態變數（σ′v0、ξR0、A<sub>do</sub>、z<sub>max</sub>…）。</li>
+    <li><b>Dynamic（或 Dynamic with consolidation）</b>：輸入地震；手動時間步長、較小的子步，避免單步應變過大；建議開 cavitation cut-off 100 kPa。</li>
+    <li><b>震後</b>：弱震段或 Consolidation 改用 PostShake = 1 的另一份材料（模擬震後再壓密沉陷）；兩段共用同一動力乘數時，第二段不要勾 Reset time。</li>
+  </ol>
+  <div class="callout link"><div class="ct">Reset state variables</div><p>Phase 的 Deformation control 裡勾選 Reset state variables 會重新初始化<b>所有</b>組成律的狀態變數，包括 PM4Sand 記住的 σ′v0、fabric 等；除非真的要從新的應力狀態重來，否則不要勾。</p></div>
+</section>
+
+<section class="sec" id="s10" data-num="6.10" data-short="限制與檢查清單">
+  <div class="sec-head"><span class="sec-num">6.10</span><h2>限制與檢查清單</h2></div>
+  <ul class="pitfalls">
+    <li><b>只能平面應變</b>2D plane strain 才能用；軸對稱或 3D 都不行，SoilTest 只有 DSS、CDSS。</li>
+    <li><b>靜態行為不準</b>重力與施工階段用其他組成律，動力階段再換成 PM4Sand。</li>
+    <li><b>初始 K0 會改變液化阻抗</b>元素試驗率定時的 K0 要與正式模型的初始應力一致。</li>
+    <li><b>CRR–N 斜率</b>hp0 只平移曲線；實驗室曲線較平緩時，大 N 與小 N 兩端會一邊高估、一邊低估。</li>
+    <li><b>時間步與收斂</b>不排水動力分析接近液化時勁度很低，步長太大會發散或出現局部假位移；縮小步長、檢查每一相的收斂紀錄。</li>
+    <li><b>參數順序與 0 值</b>13 個參數全部要填；Interfaces 頁籤的值不能是 0；用腳本建材料時順序必須與 User1～User13 相同。</li>
+  </ul>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="ch5_mohrcoulomb.html"><span class="dir">← 上一頁</span>5 · Mohr-Coulomb</a><a class="next" href="index.html"><span class="dir">回到 →</span>首頁</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 個人學習筆記</footer>
+
+<script src="assets/common.js"></script>
+<script>
+/* PM4Sand（v3.1 架構，2D 平面應變）應變控制積分 — 單一材料點
+   張量以 [xx, yy, xy] 存，壓為正；a:b = axx bxx + ayy byy + 2 axy bxy */
+const PM4 = (function () {
+  const SQ2 = Math.SQRT2, ISQ2 = Math.SQRT1_2;
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + 2 * a[2] * b[2];
+  const nrm = a => Math.sqrt(Math.max(dot(a, a), 0));
+  const add = (a, b, k = 1) => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
+  const scl = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const mac = x => (x > 0 ? x : 0);
+
+  function defaults(o) {
+    const p = Object.assign({
+      Dr: 0.55, G0: 677, hp0: 0.40, pA: 101.3, emax: 0.8, emin: 0.5, nb: 0.5, nd: 0.1,
+      phicv: 33, nu: 0.3, Q: 10, R: 1.5, m: 0.01, cz: 250, Cgd: 2, h0: -1, ce: -1, Ckaf: -1,
+      fabric: true
+    }, o || {});
+    if (p.h0 < 0) p.h0 = Math.max(0.3, (0.25 + p.Dr) / 2);
+    if (p.ce < 0) p.ce = p.Dr > 0.75 ? 0.2 : p.Dr < 0.55 ? 0.5 : 0.5 - 1.5 * (p.Dr - 0.55);
+    if (p.Ckaf < 0) p.Ckaf = Math.min(35, Math.max(4, 5 + 220 * Math.pow(Math.max(p.Dr - 0.26, 0), 3)));
+    p.M = 2 * Math.sin(p.phicv * Math.PI / 180);
+    p.pmin = p.pA / 200;
+    p.Cg1 = p.h0 / 200;
+    return p;
+  }
+
+  /* 狀態相關量：ξR、Mb、Md */
+  function surfaces(P, p, Dr) {
+    const pp = Math.max(p, P.pmin);
+    const DRcs = P.R / (P.Q - Math.log(100 * pp / P.pA));
+    const xi = DRcs - Dr;
+    let Mb, Md;
+    if (xi <= 0) { Mb = P.M * Math.exp(-P.nb * xi); Md = P.M * Math.exp(P.nd * xi); }
+    else { Mb = P.M * Math.exp(-P.nb / 4 * xi); Md = P.M * Math.exp(4 * P.nd * xi); }
+    Mb = Math.min(Mb, 2.0);
+    return { xi, Mb, Md, DRcs };
+  }
+
+  /* 初始化：σ′v0、K0、靜偏剪 τs */
+  function init(P, sv0, K0, taus) {
+    const sig = [K0 * sv0, sv0, taus || 0];
+    const p = (sig[0] + sig[1]) / 2;
+    const r = scl([sig[0] - p, sig[1] - p, sig[2]], 1 / p);
+    const e0 = P.emax - P.Dr * (P.emax - P.emin);
+    const sf = surfaces(P, p, P.Dr);
+    let Ado;
+    if (sf.xi < 0) Ado = sf.Mb >= 2 ? 1.5 : 2.5 * (Math.asin(sf.Mb / 2) - Math.asin(P.M / 2)) / (sf.Mb - sf.Md);
+    else Ado = 1.24;
+    const zmax = Math.min(0.7 * Math.exp(-6.1 * sf.xi), 20);
+    return {
+      sig, alpha: r.slice(), ain: r.slice(), z: [0, 0, 0], zcum: 0, zpeak: 0, pzp: p, pzpSet: false,
+      eps: [0, 0, 0], e: e0, Dr: P.Dr, Ado, zmax, xi0: sf.xi, sv0, p0: p,
+      mode: 'elastic', D: 0, L: 0
+    };
+  }
+
+  function elasticModuli(P, S, p, r, Mb) {
+    const pp = Math.max(p, P.pmin);
+    const Mcur = SQ2 * nrm(r);
+    const Csr = 1 - 0.5 * Math.pow(Math.min(Mcur / Mb, 1), 4);
+    const zr = P.fabric ? S.zcum / S.zmax : 0;
+    const G = P.G0 * P.pA * Math.sqrt(pp / P.pA) * Csr * (1 + zr) / (1 + zr * P.Cgd);
+    const K = 2 * (1 + P.nu) / (3 * (1 - 2 * P.nu)) * G;
+    return { G, K };
+  }
+
+  /* 在目前狀態下，對應變增量 de（[xx,yy,γxy/2]）計算應力增量與塑性量；不改狀態 */
+  function response(P, S, deps, forcePlastic) {
+    const sig = S.sig, p = (sig[0] + sig[1]) / 2;
+    const s = [sig[0] - p, sig[1] - p, sig[2]];
+    const r = scl(s, 1 / Math.max(p, 1e-9));
+    const sf = surfaces(P, p, S.Dr);
+    const { G, K } = elasticModuli(P, S, p, r, sf.Mb);
+    const dv = deps[0] + deps[1];
+    const de = [deps[0] - dv / 2, deps[1] - dv / 2, deps[2]];
+    const dsigE = [2 * G * de[0] + K * dv, 2 * G * de[1] + K * dv, 2 * G * de[2]];
+    const ra = add(r, S.alpha, -1);
+    const dist = nrm(ra), R0 = ISQ2 * P.m;
+    const out = { dsig: dsigE, L: 0, D: 0, G, K, sf, r, plastic: false };
+    if (dist < 0.999 * R0 && !forcePlastic) return out;
+    const n = scl(ra, 1 / dist);
+    const ab = scl(n, ISQ2 * (sf.Mb - P.m)), ad = scl(n, ISQ2 * (sf.Md - P.m));
+    // 反向點（應力反轉時 αin ← α）
+    let ain = S.ain;
+    if (dot(add(S.alpha, ain, -1), n) < 0) ain = S.alpha;
+    const xb = dot(add(ab, S.alpha, -1), n);
+    const yin = Math.max(dot(add(S.alpha, ain, -1), n), 0);
+    const zn = P.fabric ? dot(S.z, n) : 0;
+    // 塑性模數 Kp
+    let Ckal = 1, CKpTerm = 1;
+    if (P.fabric && S.zcum > 0) {
+      const Czpk1 = S.zpeak / (S.zcum + S.zmax / 5);
+      const Czpk2 = S.zpeak / (S.zcum + S.zmax / 100);
+      const Cpzp2 = mac(S.pzp - p) / (mac(S.pzp - p) + P.pmin);
+      Ckal = 1 + P.Ckaf / (1 + Math.pow(2.5 * yin, 2)) * Cpzp2 * Czpk1;
+      CKpTerm = 1 / (1 + 2 * (S.zpeak / S.zmax) * mac(xb) * Math.sqrt(Math.max(1 - Czpk2, 0)));
+    }
+    const core = xb >= 0 ? Math.sqrt(xb) : xb;
+    const Kp = G * P.h0 * core / (Math.exp(yin) - 1 + P.Cg1) * Ckal * CKpTerm;
+    // 剪脹 D
+    const xd = dot(add(ad, S.alpha, -1), n);
+    let D;
+    if (xd < 0) {                                    // 剪脹
+      let Ad = S.Ado;
+      if (P.fabric && S.zcum > 0 && S.zpeak > 0) {
+        const t = Math.pow(Math.max(1 - mac(-zn) / (SQ2 * S.zpeak), 0), 3);
+        const Cpzp = 1 / (1 + Math.pow(2.5 * Math.max(p, P.pmin) / S.pzp, 5));
+        Ad = S.Ado / ((S.zcum * S.zcum / S.zmax) * t * P.ce * P.ce * Cpzp + 1);
+      }
+      D = Ad * xd;
+    } else {                                         // 收縮
+      const hp = P.hp0 * Math.exp(-0.7 + 7 * Math.pow(mac(0.5 - sf.xi), 2));
+      let Cdz = 1, Cin = 0;
+      if (P.fabric) {
+        Cdz = Math.max((1 - SQ2 * S.zpeak / S.zmax) * (S.zmax / (S.zmax + S.zcum)), 1 / (1 + S.zmax / 2));
+        Cin = 2 * mac(zn) / (SQ2 * S.zmax);
+      }
+      const Adc = S.Ado * (1 + mac(zn)) / (hp * Cdz);
+      D = Adc * Math.pow(yin + Cin, 2) * xd / (xd + 0.16);
+      D *= Math.min(Math.max((p - P.pmin) / P.pmin, 0), 1);   // p 接近 pmin 時不再收縮
+    }
+    const nr = dot(n, r);
+    const denom = Kp + 2 * G - K * D * nr;
+    const L = (2 * G * dot(n, de) - K * dv * nr) / denom;
+    out.Kp = Kp; out.n = n; out.ab = ab; out.ad = ad; out.ain = ain; out.xd = xd;
+    if (L <= 0 && !forcePlastic) return out;
+    out.plastic = true; out.L = L; out.D = D;
+    out.dsig = [dsigE[0] - L * (2 * G * n[0] + K * D), dsigE[1] - L * (2 * G * n[1] + K * D), dsigE[2] - L * 2 * G * n[2]];
+    return out;
+  }
+
+  /* 套用增量，更新內部變數 */
+  function apply(P, S, deps, R) {
+    const sigOld = S.sig;
+    S.sig = add(S.sig, R.dsig);
+    S.eps = add(S.eps, deps);
+    const dv = deps[0] + deps[1];
+    S.e -= (1 + S.e) * dv;
+    S.Dr = (P.emax - S.e) / (P.emax - P.emin);
+    let p = (S.sig[0] + S.sig[1]) / 2;
+    if (p < P.pmin) {                               // p 下限 pmin
+      const sn = [S.sig[0] - p, S.sig[1] - p, S.sig[2]];
+      p = P.pmin;
+      if (nrm(sn) / p <= ISQ2 * surfaces(P, p, S.Dr).Mb) {
+        S.sig = [p + sn[0], p + sn[1], sn[2]];      // 保留偏應力，只把 p 拉回 pmin
+      } else {                                      // 偏應力太大：保留前一步的應力比
+        const po = Math.max((sigOld[0] + sigOld[1]) / 2, P.pmin);
+        const ro = [(sigOld[0] - po) / po, (sigOld[1] - po) / po, sigOld[2] / po];
+        S.sig = [p * (1 + ro[0]), p * (1 + ro[1]), p * ro[2]];
+      }
+    }
+    S.mode = R.plastic ? (R.D < 0 ? 'dilation' : 'contraction') : 'elastic';
+    S.D = R.D; S.L = R.L;
+    if (R.plastic) {
+      S.ain = R.ain;
+      // 背應力比：dα = L·(2/3)h·(αb − α)，(2/3)h = Kp ／ (p (αb − α):n)；一步不越過 αb
+      const xb = dot(add(R.ab, S.alpha, -1), R.n);
+      const f = Math.min(Math.max(R.L * R.Kp / (p * (Math.abs(xb) > 1e-9 ? xb : 1e-9)), 0), 1);
+      S.alpha = add(S.alpha, add(R.ab, S.alpha, -1), f);
+      if (P.fabric && R.D < 0) {
+        if (!S.pzpSet) { S.pzp = p; S.pzpSet = true; }
+        const cz = P.cz / (1 + mac(S.zcum / (2 * S.zmax) - 1));
+        const dz = scl(add(scl(R.n, SQ2 * S.zmax), S.z), -cz * R.L);
+        S.z = add(S.z, dz);
+        S.zcum += nrm(dz);
+        S.zpeak = Math.max(S.zpeak, nrm(S.z) / SQ2);
+      }
+    }
+    // 應力比不得超出邊界面太多（低 p 時一步可能衝過頭）
+    let s = [S.sig[0] - p, S.sig[1] - p, S.sig[2]];
+    let r = scl(s, 1 / p);
+    const rmax = ISQ2 * surfaces(P, p, S.Dr).Mb * 1.02;
+    const rn = nrm(r);
+    if (rn > 1.3 * rmax) {
+      r = scl(r, rmax / rn);
+      S.sig = [p + p * r[0], p + p * r[1], p * r[2]];
+    }
+    // 一致性：塑性時把 α 沿 (r − α) 方向調整，使 r 精確落在降伏面上
+    const ra = add(r, S.alpha, -1), d = nrm(ra), R0 = ISQ2 * P.m;
+    if (d > R0 || (R.plastic && d > 1e-12)) S.alpha = add(r, ra, -R0 / d);   // 精確滿足降伏條件
+  }
+
+  /* 一個應變增量：應力變化太大（低 p 時）就自動細分 */
+  function step(P, S, deps, depth) {
+    depth = depth || 0;
+    if (depth < 10) {
+      const R = response(P, S, deps, false);
+      const p = Math.max((S.sig[0] + S.sig[1]) / 2, P.pmin);
+      if (nrm(R.dsig) > 0.02 * p) { const h = scl(deps, 0.5); step(P, S, h, depth + 1); step(P, S, h, depth + 1); return; }
+    }
+    step1(P, S, deps);
+  }
+
+  /* 一個應變增量（含進入降伏面的分割） */
+  function step1(P, S, deps) {
+    let R = response(P, S, deps, false);
+    if (!R.plastic) {
+      // 試算是否越出降伏面
+      const sig = add(S.sig, R.dsig), p = (sig[0] + sig[1]) / 2;
+      const r = scl([sig[0] - p, sig[1] - p, sig[2]], 1 / p);
+      const R0 = ISQ2 * P.m;
+      if (nrm(add(r, S.alpha, -1)) > R0) {
+        const p0 = (S.sig[0] + S.sig[1]) / 2;
+        const r0 = scl([S.sig[0] - p0, S.sig[1] - p0, S.sig[2]], 1 / p0);
+        if (nrm(add(r0, S.alpha, -1)) < 0.999 * R0) {
+          let lo = 0, hi = 1;                        // 彈性部分
+          for (let i = 0; i < 30; i++) {
+            const mid = (lo + hi) / 2, sg = add(S.sig, R.dsig, mid), pm = (sg[0] + sg[1]) / 2;
+            const rm = scl([sg[0] - pm, sg[1] - pm, sg[2]], 1 / pm);
+            if (nrm(add(rm, S.alpha, -1)) > R0) hi = mid; else lo = mid;
+          }
+          apply(P, S, scl(deps, lo), R);
+          const rest = scl(deps, 1 - lo);
+          const R2 = response(P, S, rest, false);
+          apply(P, S, rest, R2);
+          return;
+        }
+      }
+    }
+    // 改良 Euler：用中點狀態的反應
+    if (R.plastic) {
+      const T = clone(S);
+      apply(P, T, scl(deps, 0.5), R);
+      const Rm = response(P, T, deps, false);
+      if (Rm.plastic) R = Rm;
+    }
+    apply(P, S, deps, R);
+  }
+
+  function clone(S) {
+    return Object.assign({}, S, { sig: S.sig.slice(), alpha: S.alpha.slice(), ain: S.ain.slice(), z: S.z.slice(), eps: S.eps.slice() });
+  }
+
+  /* 排水 DSS：dεxx = 0、σ′yy 維持 σ′v0，求 dεyy（含漂移修正） */
+  function drainedStep(P, S, dg) {
+    const target = S.sv0 - S.sig[1];
+    const f = dy => response(P, S, [0, dy, dg / 2], false).dsig[1] - target;
+    let dy = 0, f0 = f(0);
+    for (let it = 0; it < 6; it++) {
+      const h = 1e-7, k = (f(dy + h) - f0) / h;
+      if (!isFinite(k) || k === 0) break;
+      dy -= f0 / k;
+      f0 = f(dy);
+      if (Math.abs(f0) < 1e-8 * S.sv0) break;
+    }
+    step(P, S, [0, dy, dg / 2]);
+  }
+
+  function snapshot(S, extra) {
+    const p = (S.sig[0] + S.sig[1]) / 2;
+    return Object.assign({
+      gam: 2 * S.eps[2] * 100, tau: S.sig[2], sv: S.sig[1], sh: S.sig[0], p,
+      ru: 1 - S.sig[1] / S.sv0, ev: (S.eps[0] + S.eps[1]) * 100,
+      ax: S.alpha[1], ay: S.alpha[2], zx: S.z[1], zy: S.z[2], zcum: S.zcum, mode: S.mode, Dr: S.Dr, D: S.D
+    }, extra || {});
+  }
+
+  /* 不排水（定體積）應力控制循環 DSS */
+  function runCyclic(P0, opt) {
+    const P = defaults(P0);
+    const { sv0, K0, csr, alpha = 0, nmax = 30, dg = 5e-6, gLiq = 3, gStop = 4.5, rec = 1 } = opt;
+    const S = init(P, sv0, K0, alpha * sv0);
+    const taus = alpha * sv0, amp = csr * sv0;
+    const hist = [snapshot(S, { N: 0 })];
+    let nLiq = null, n = 0, ok = true, k = 0, ruMax = 0;
+    const g0 = 0;
+    const cyc = (tau, n0, kind) => {
+      const x = Math.max(-1, Math.min(1, (tau - taus) / amp));
+      if (kind === 'up') return n0 + Math.asin(x) / (2 * Math.PI);
+      if (kind === 'down') return n0 + (Math.PI / 2 - Math.asin(x)) / (2 * Math.PI);
+      return n0 + (Math.asin(x) + Math.PI / 2) / (2 * Math.PI);
+    };
+    function push(target, dir, n0, kind) {
+      let guard = 0;
+      while ((S.sig[2] - target) * dir < 0) {
+        step(P, S, [0, 0, dir * dg / 2]);
+        const gam = 2 * S.eps[2] * 100 - g0;
+        const N = cyc(S.sig[2], n0, kind);
+        const ru = 1 - S.sig[1] / sv0;
+        if (ru > ruMax) ruMax = ru;
+        if (nLiq === null && Math.abs(gam) >= gLiq) nLiq = N;
+        if (rec) {
+          const last = hist[hist.length - 1];
+          if (Math.abs(2 * S.eps[2] * 100 - last.gam) >= rec * 0.004 || Math.abs(S.sig[2] - last.tau) >= rec * 0.004 * sv0 ||
+              Math.abs(S.sig[1] - last.sv) >= rec * 0.004 * sv0) hist.push(snapshot(S, { N }));
+        }
+        if (Math.abs(gam) >= gStop || !isFinite(S.sig[2])) { hist.push(snapshot(S, { N })); return false; }
+        if (++guard > 4e6) return false;
+      }
+      hist.push(snapshot(S, { N: cyc(S.sig[2], n0, kind), turn: true }));
+      return true;
+    }
+    while (n < nmax) {
+      if (!push(taus + amp, 1, n, 'up')) break;
+      if (!push(taus - amp, -1, n + 0.25, 'down')) break;
+      if (!push(taus, 1, n + 0.75, 'back')) break;
+      n += 1;
+    }
+    return { P, hist, nLiq, ruMax, S };
+  }
+
+  /* 單調 DSS：drained 或 undrained，推到 γ = gmax(%) */
+  function runMono(P0, opt) {
+    const P = defaults(P0);
+    const { sv0, K0, alpha = 0, drained = false, gmax = 10, dg = 5e-6, rec = 20 } = opt;
+    const S = init(P, sv0, K0, alpha * sv0);
+    const hist = [snapshot(S, { N: 0 })];
+    let k = 0;
+    while (2 * S.eps[2] * 100 < gmax) {
+      if (drained) drainedStep(P, S, dg); else step(P, S, [0, 0, dg / 2]);
+      if (++k % rec === 0) hist.push(snapshot(S, { N: 0 }));
+      if (!isFinite(S.sig[2])) break;
+    }
+    hist.push(snapshot(S, { N: 0 }));
+    return { P, hist, S };
+  }
+
+  return { defaults, init, surfaces, runCyclic, runMono, step, response };
+})();
+
+
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmt = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
+
+  /* ---------------- 共用：canvas 畫圖（四邊框、刻度朝內、無格線） ---------------- */
+  function niceTicks(a, b, n = 5) {
+    const span = b - a; if (!(span > 0)) return [a];
+    const raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const st = [1, 2, 2.5, 5, 10].map(k => k * mag).find(s => s >= raw) || 10 * mag;
+    const out = []; for (let v = Math.ceil(a / st - 1e-9) * st; v <= b + 1e-9 * st; v += st) out.push(+v.toFixed(10));
+    return out;
+  }
+  function decimals(ticks) {
+    if (ticks.length < 2) return 0;
+    const st = Math.abs(ticks[1] - ticks[0]);
+    return Math.max(0, -Math.floor(Math.log10(st) + 1e-9) + (st / Math.pow(10, Math.floor(Math.log10(st))) === 2.5 ? 1 : 0));
+  }
+  function setup(cv) {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const w = Math.max(200, r.width), h = Math.max(150, r.height || w * 0.75);
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    return { ctx, w, h };
+  }
+  function axes(cv, o) {
+    const { ctx, w, h } = setup(cv);
+    const font = css('--font-text') || 'sans-serif';
+    const ink = css('--ink'), L = 56, R = 14, T = 12, B = 44;
+    const pw = w - L - R, ph = h - T - B;
+    const [x0, x1] = o.xr, [y0, y1] = o.yr;
+    const lx = v => Math.log10(v);
+    const X = o.logx ? v => L + (lx(v) - lx(x0)) / (lx(x1) - lx(x0)) * pw : v => L + (v - x0) / (x1 - x0) * pw;
+    const Y = v => T + (y1 - v) / (y1 - y0) * ph;
+    ctx.save();
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 1; ctx.font = `12px ${font}`;
+    ctx.strokeRect(L + .5, T + .5, pw, ph);
+    const tl = 5;
+    let xt;
+    if (o.logx) { xt = [1, 2, 3, 5, 10, 20, 30, 50, 100, 200].filter(v => v >= x0 && v <= x1); }
+    else xt = niceTicks(x0, x1, o.nx || 5);
+    const xd = o.logx ? 0 : decimals(xt), yt = niceTicks(y0, y1, o.ny || 5), yd = decimals(yt);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    xt.forEach(v => { const x = Math.round(X(v)) + .5; ctx.beginPath(); ctx.moveTo(x, T + ph); ctx.lineTo(x, T + ph - tl); ctx.moveTo(x, T); ctx.lineTo(x, T + tl); ctx.stroke(); ctx.fillText(v.toFixed(xd), x, T + ph + 5); });
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    yt.forEach(v => { const y = Math.round(Y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + tl, y); ctx.moveTo(L + pw, y); ctx.lineTo(L + pw - tl, y); ctx.stroke(); ctx.fillText(v.toFixed(yd), L - 6, y); });
+    ctx.font = `13px ${font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(o.xl || '', L + pw / 2, h - 3);
+    ctx.save(); ctx.translate(13, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'top'; ctx.fillText(o.yl || '', 0, -2); ctx.restore();
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    return { ctx, X, Y, L, T, pw, ph, done: () => ctx.restore() };
+  }
+  function line(A, xs, ys, color, width = 1.2, dash, i0 = 0, i1 = xs.length) {
+    const c = A.ctx; c.beginPath(); c.strokeStyle = color; c.lineWidth = width; c.setLineDash(dash || []);
+    let started = false;
+    for (let i = i0; i < i1; i++) { const x = A.X(xs[i]), y = A.Y(ys[i]); if (!isFinite(x) || !isFinite(y)) continue; if (!started) { c.moveTo(x, y); started = true; } else c.lineTo(x, y); }
+    c.stroke(); c.setLineDash([]);
+  }
+  function dot(A, x, y, color, r = 4, hollow) {
+    const c = A.ctx; c.beginPath(); c.arc(A.X(x), A.Y(y), r, 0, 2 * Math.PI);
+    if (hollow) { c.strokeStyle = color; c.lineWidth = 1.2; c.stroke(); } else { c.fillStyle = color; c.fill(); }
+  }
+  const rangeOf = (arr, pad = 0.06, sym = false, zero = false) => {
+    let a = Math.min(...arr), b = Math.max(...arr);
+    if (sym) { const m = Math.max(Math.abs(a), Math.abs(b)) || 1; a = -m; b = m; }
+    if (zero) a = Math.min(a, 0);
+    const d = (b - a) || Math.abs(b) || 1; return [a - pad * d * (zero && a === 0 ? 0 : 1), b + pad * d];
+  };
+
+  /* ---------------- 6.2 狀態計算器 ---------------- */
+  function updState() {
+    const Dr = +$('cDr').value, sv = +$('cSv').value, K0 = +$('cK0').value, phi = +$('cPhi').value;
+    $('oDr').textContent = Dr.toFixed(2); $('oSv').textContent = sv; $('oK0').textContent = K0.toFixed(2); $('oPhi').textContent = phi.toFixed(1);
+    const P = PM4.defaults({ Dr, phicv: phi });
+    const S = PM4.init(P, sv, K0, 0);
+    const p = S.p0, sf = PM4.surfaces(P, p, Dr);
+    const hp = Math.exp(-0.7 + 7 * Math.pow(Math.max(0.5 - sf.xi, 0), 2));
+    const items = [
+      ['p (kPa)', fmt(p, 1)], ['D<sub>R,cs</sub>', fmt(sf.DRcs, 3)], ['ξR', fmt(sf.xi, 3), sf.xi < 0 ? 'hl' : 'warn'],
+      ['M = 2 sin φcv', fmt(P.M, 3)], ['M<sup>b</sup>（邊界）', fmt(sf.Mb, 3)], ['M<sup>d</sup>（剪脹）', fmt(sf.Md, 3)],
+      ['h0', fmt(P.h0, 3)], ['hp／hp0', fmt(hp, 1)], ['A<sub>do</sub>', fmt(S.Ado, 3)], ['z<sub>max</sub>', fmt(S.zmax, 2)],
+      ['ce', fmt(P.ce, 3)], ['Ckaf', fmt(P.Ckaf, 1)]];
+    $('stateStats').innerHTML = items.map(([k, v, c]) => `<div class="stat ${c || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    // 臨界狀態線：D_R,cs 對 p（對數）
+    const cv = $('cslCanvas');
+    const ps = []; for (let lg = 0; lg <= 3.0001; lg += 0.02) ps.push(Math.pow(10, lg));
+    drawCSL(cv, ps, P, Dr, p, sf);
+  }
+  function drawCSL(cv, ps, P, Dr, p, sf) {
+    const { ctx, w, h } = setup(cv);
+    const font = css('--font-text'), ink = css('--ink');
+    const L = 56, R = 14, T = 12, B = 44, pw = w - L - R, ph = h - T - B;
+    const X = v => L + Math.log10(v) / 3 * pw, Y = v => T + (1 - v) * ph;
+    ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 1; ctx.font = `12px ${font}`;
+    ctx.strokeRect(L + .5, T + .5, pw, ph);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [1, 10, 100, 1000].forEach(v => { const x = Math.round(X(v)) + .5; ctx.beginPath(); ctx.moveTo(x, T + ph); ctx.lineTo(x, T + ph - 5); ctx.moveTo(x, T); ctx.lineTo(x, T + 5); ctx.stroke(); ctx.fillText(String(v), x, T + ph + 5); });
+    [2, 3, 5, 20, 30, 50, 200, 300, 500].forEach(v => { const x = Math.round(X(v)) + .5; ctx.beginPath(); ctx.moveTo(x, T + ph); ctx.lineTo(x, T + ph - 3); ctx.moveTo(x, T); ctx.lineTo(x, T + 3); ctx.stroke(); });
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    [0, 0.2, 0.4, 0.6, 0.8, 1].forEach(v => { const y = Math.round(Y(v)) + .5; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + 5, y); ctx.moveTo(L + pw, y); ctx.lineTo(L + pw - 5, y); ctx.stroke(); ctx.fillText(v.toFixed(1), L - 6, y); });
+    ctx.font = `13px ${font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('p (kPa)', L + pw / 2, h - 3);
+    ctx.save(); ctx.translate(13, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'top'; ctx.fillText('相對密度 D_R', 0, -2); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    ctx.beginPath(); ctx.strokeStyle = ink; ctx.lineWidth = 1.6;
+    ps.forEach((v, i) => { const d = P.R / (P.Q - Math.log(100 * v / P.pA)); i ? ctx.lineTo(X(v), Y(d)) : ctx.moveTo(X(v), Y(d)); }); ctx.stroke();
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = css('--blue'); ctx.beginPath(); ctx.moveTo(L, Y(Dr)); ctx.lineTo(L + pw, Y(Dr)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = css('--red'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(p), Y(Dr)); ctx.lineTo(X(p), Y(sf.DRcs)); ctx.stroke();
+    ctx.fillStyle = css('--red'); ctx.beginPath(); ctx.arc(X(p), Y(Dr), 4.5, 0, 7); ctx.fill();
+    ctx.fillStyle = ink; ctx.font = `12.5px ${font}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(sf.xi < 0 ? '比臨界密（剪脹）' : '比臨界鬆（收縮）', Math.min(X(p) + 8, L + pw - 110), Y((Dr + sf.DRcs) / 2));
+    ctx.restore();
+  }
+  ['cDr', 'cSv', 'cK0', 'cPhi'].forEach(id => $(id).addEventListener('input', updState));
+
+  /* ---------------- 6.6 單剪實驗室 ---------------- */
+  const PRESETS = {
+    cyc55: { test: 'cyc', fab: 1, Dr: 0.55, G0: 677, hp0: 0.40, sv: 100, K0: 0.5, csr: 0.15, al: 0, N: 40 },
+    cyc55nf: { test: 'cyc', fab: 0, Dr: 0.55, G0: 677, hp0: 0.40, sv: 100, K0: 0.5, csr: 0.15, al: 0, N: 30 },
+    cyc35: { test: 'cyc', fab: 1, Dr: 0.35, G0: 476, hp0: 0.53, sv: 100, K0: 0.5, csr: 0.10, al: 0, N: 40 },
+    cyc75: { test: 'cyc', fab: 1, Dr: 0.75, G0: 890, hp0: 0.63, sv: 100, K0: 0.5, csr: 0.30, al: 0, N: 40 },
+    leap: { test: 'cyc', fab: 1, Dr: 0.663, G0: 282.8, hp0: 0.0542, sv: 40, K0: 0.43, csr: 0.17, al: 0, N: 40, emax: 0.78, emin: 0.51, nb: 0.7, phicv: 30 },
+    leapA: { test: 'cyc', fab: 1, Dr: 0.663, G0: 282.8, hp0: 0.0542, sv: 40, K0: 0.43, csr: 0.23, al: 0.25, N: 40, emax: 0.78, emin: 0.51, nb: 0.7, phicv: 30 },
+    dDense: { test: 'md', fab: 1, Dr: 0.75, G0: 890, hp0: 0.63, sv: 100, K0: 0.5, gm: 10 },
+    uLoose: { test: 'mu', fab: 1, Dr: 0.35, G0: 476, hp0: 0.53, sv: 100, K0: 0.5, gm: 10 }
+  };
+  const SEC = { emax: 0.8, emin: 0.5, nb: 0.5, nd: 0.1, phicv: 33, nu: 0.3, Q: 10, R: 1.5 };
+  const secIds = { emax: 'pEmax', emin: 'pEmin', nb: 'pNb', nd: 'pNd', phicv: 'pPhi', nu: 'pNu', Q: 'pQ', R: 'pR' };
+  let test = 'cyc', fab = 1, run = null, idx = 0, playing = false, lastPreset = 'cyc55';
+
+  function setSeg(seg, v) { [...$(seg).querySelectorAll('button')].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v)))); }
+  function showModeCtrls() {
+    document.querySelectorAll('#lab .cyc-only').forEach(e => { e.hidden = test !== 'cyc'; });
+    document.querySelectorAll('#lab .mono-only').forEach(e => { e.hidden = test === 'cyc'; });
+  }
+  $('testSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; test = b.dataset.v; setSeg('testSeg', test); showModeCtrls(); });
+  $('fabSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fab = +b.dataset.v; setSeg('fabSeg', fab); });
+  function syncOut() { const o = document.querySelector('#lab output[for=pDr]'); o.textContent = (+$('pDr').value).toFixed(3); const el = $('pDr'); el.style.setProperty('--pct', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+  $('pDr').addEventListener('input', syncOut);
+  $('g0Sug').addEventListener('click', () => { const Dr = +$('pDr').value; $('pG0').value = (167 * Math.sqrt(46 * Dr * Dr + 2.5)).toFixed(0); });
+
+  function applyPreset(k) {
+    const p = PRESETS[k]; lastPreset = k;
+    test = p.test; fab = p.fab; setSeg('testSeg', test); setSeg('fabSeg', fab); showModeCtrls();
+    $('pDr').value = p.Dr; $('pG0').value = p.G0; $('pHp').value = p.hp0; $('pSv').value = p.sv; $('pK0').value = p.K0;
+    if (p.csr != null) $('pCsr').value = p.csr; if (p.al != null) $('pAl').value = p.al; if (p.N != null) $('pN').value = p.N; if (p.gm != null) $('pGm').value = p.gm;
+    Object.keys(SEC).forEach(s => { $(secIds[s]).value = p[s] != null ? p[s] : SEC[s]; });
+    syncOut();
+    [...$('presets').querySelectorAll('.btn')].forEach(b => b.classList.toggle('on', b.dataset.p === k));
+    simulate();
+  }
+  $('presets').addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b) applyPreset(b.dataset.p); });
+
+  function params() {
+    const P = { Dr: +$('pDr').value, G0: +$('pG0').value, hp0: +$('pHp').value, fabric: !!fab };
+    Object.keys(SEC).forEach(s => { P[s] = +$(secIds[s]).value; });
+    return P;
+  }
+  function simulate() {
+    stop();
+    const P = params(), sv0 = +$('pSv').value, K0 = +$('pK0').value;
+    const t0 = performance.now();
+    let r;
+    if (test === 'cyc') r = PM4.runCyclic(P, { sv0, K0, csr: +$('pCsr').value, alpha: +$('pAl').value, nmax: +$('pN').value, rec: 1 });
+    else r = PM4.runMono(P, { sv0, K0, drained: test === 'md', gmax: +$('pGm').value, rec: 10 });
+    const ms = performance.now() - t0;
+    r.test = test; r.sv0 = sv0;
+    const H = r.hist;
+    r.arr = k => H.map(h => h[k]);
+    r.ryy = H.map(h => (h.sv - h.p) / h.p); r.rxy = H.map(h => h.tau / h.p);
+    run = r;
+    crrParText();
+    const diag = test === 'cyc'
+      ? [['達 γ = 3% 的 N', r.nLiq == null ? `未液化（${$('pN').value} 圈內）` : fmt(r.nLiq, 2), r.nLiq == null ? '' : 'hl'], ['ru 最大值', fmt(r.ruMax, 3)], ['ξR0', fmt(r.S.xi0, 3)], ['計算時間', `${ms.toFixed(0)} ms`], ['資料點', H.length.toLocaleString()]]
+      : [['γ 最大', fmt(H[H.length - 1].gam, 1) + ' %'], ['τ 峰值 (kPa)', fmt(Math.max(...H.map(h => h.tau)), 1), 'hl'], ['ξR0', fmt(r.S.xi0, 3)], ['計算時間', `${ms.toFixed(0)} ms`], ['資料點', H.length.toLocaleString()]];
+    $('labDiag').innerHTML = diag.map(([k, v, c]) => `<div class="stat ${c || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    $('runMsg').textContent = '';
+    $('scrub').max = H.length - 1; idx = H.length - 1; $('scrub').value = idx;
+    $('h3').textContent = test === 'cyc' ? '超額孔隙水壓比 ru–N' : test === 'mu' ? '超額孔隙水壓比 ru–γ' : '體積應變 εv–γ（正為壓縮）';
+    $('h1').textContent = test === 'md' ? '應力路徑 τ–σ′v（σ′v 固定）與 τ–σ′h' : '應力路徑 τ–σ′v';
+    // 固定範圍
+    r.rg = {
+      sv: [0, Math.max(...r.arr('sv'), test === 'md' ? Math.max(...r.arr('sh')) : 0) * 1.05],
+      tau: test === 'cyc' ? rangeOf(r.arr('tau'), 0.08, true) : [0, Math.max(...r.arr('tau')) * 1.08],
+      gam: test === 'cyc' ? rangeOf(r.arr('gam'), 0.06, true) : [0, Math.max(...r.arr('gam'))],
+      third: test === 'cyc' ? [0, Math.max(1, Math.ceil(H[H.length - 1].N))] : null
+    };
+    let mb = 0; H.forEach(h => { mb = Math.max(mb, PM4.surfaces(r.P, h.p, h.Dr).Mb); });
+    r.rr = Math.max(mb / 2, ...r.rxy.map(Math.abs), ...r.ryy.map(Math.abs)) * 1.08;
+    draw();
+  }
+  $('runBtn').addEventListener('click', () => { $('runMsg').textContent = '計算中…'; setTimeout(simulate, 20); });
+
+  function draw() {
+    if (!run) return;
+    const r = run, H = r.hist, i = Math.min(idx, H.length - 1), h = H[i];
+    const ink = css('--ink'), blue = css('--blue'), red = css('--red'), gray = css('--gray'), band = css('--pband');
+    const gam = r.arr('gam'), tau = r.arr('tau'), sv = r.arr('sv');
+    // 1 應力路徑
+    let A = axes($('cv1'), { xr: r.rg.sv, yr: r.rg.tau, xl: 'σ′v (kPa)', yl: 'τ (kPa)' });
+    if (r.test === 'cyc') { const c = r.sv0 * +$('pCsr').value, s = r.sv0 * +$('pAl').value; [s + c, s - c].forEach(v => line(A, [0, 1e6], [v, v], gray, 1, [3, 3])); }
+    line(A, sv, tau, band, 1);
+    if (r.test === 'md') { const sh = r.arr('sh'); line(A, sh, tau, band, 1); line(A, sh, tau, blue, 1.3, null, 0, i + 1); dot(A, sh[i], tau[i], blue, 3.5); }
+    line(A, sv, tau, ink, 1.2, null, 0, i + 1);
+    dot(A, sv[i], tau[i], red, 4.5); A.done();
+    // 2 τ–γ
+    A = axes($('cv2'), { xr: r.rg.gam, yr: r.rg.tau, xl: 'γ (%)', yl: 'τ (kPa)' });
+    if (r.test === 'cyc') [3, -3].forEach(v => line(A, [v, v], [-1e6, 1e6], gray, 1, [3, 3]));
+    line(A, gam, tau, band, 1); line(A, gam, tau, ink, 1.2, null, 0, i + 1); dot(A, gam[i], tau[i], red, 4.5); A.done();
+    // 3 ru–N 或 εv／ru–γ
+    if (r.test === 'cyc') {
+      const N = r.arr('N'), ru = r.arr('ru');
+      A = axes($('cv3'), { xr: r.rg.third, yr: [0, 1.05], xl: '循環數 N', yl: 'ru = 1 − σ′v／σ′v0' });
+      if (r.nLiq != null) line(A, [r.nLiq, r.nLiq], [-1, 2], red, 1, [4, 3]);
+      line(A, N, ru, band, 1); line(A, N, ru, blue, 1.3, null, 0, i + 1); dot(A, N[i], ru[i], red, 4.5); A.done();
+    } else {
+      const y = r.test === 'mu' ? r.arr('ru') : r.arr('ev');
+      const yr = r.test === 'mu' ? rangeOf(y, 0.08) : rangeOf(y, 0.1);
+      A = axes($('cv3'), { xr: r.rg.gam, yr, xl: 'γ (%)', yl: r.test === 'mu' ? 'ru' : 'εv (%)' });
+      line(A, [-1e3, 1e3], [0, 0], gray, 1, [3, 3]);
+      line(A, gam, y, band, 1); line(A, gam, y, blue, 1.3, null, 0, i + 1); dot(A, gam[i], y[i], red, 4.5); A.done();
+    }
+    // 4 應力比平面
+    const R = r.rr, sf = PM4.surfaces(r.P, h.p, h.Dr);
+    const bb = $('cv4').getBoundingClientRect(), kx = Math.max(1, (bb.width - 70) / Math.max(bb.height - 56, 50));
+    A = axes($('cv4'), { xr: [-R * kx, R * kx], yr: [-R, R], xl: 'r_yy = (σ′yy − σ′xx)／(σ′xx + σ′yy)', yl: 'r_xy = τ／p' });
+    const c = A.ctx, sc = A.ph / (2 * R);
+    const circ = (rad, col, w, dash) => { c.beginPath(); c.setLineDash(dash || []); c.strokeStyle = col; c.lineWidth = w; c.arc(A.X(0), A.Y(0), rad * sc, 0, 2 * Math.PI); c.stroke(); c.setLineDash([]); };
+    line(A, [-R * kx, R * kx], [0, 0], band, 1); line(A, [0, 0], [-R, R], band, 1);
+    circ(sf.Mb / 2, red, 1.6); circ(r.P.M / 2, gray, 1.3, [6, 4]); circ(sf.Md / 2, blue, 1.6);
+    line(A, r.ryy, r.rxy, band, 1, null, 0, i + 1);
+    const i0 = Math.max(0, i - 400); line(A, r.ryy, r.rxy, gray, 1.2, null, i0, i + 1);
+    // 降伏面（放大到 5 px）與背應力比
+    c.beginPath(); c.strokeStyle = ink; c.lineWidth = 1.4; c.arc(A.X(h.ax), A.Y(h.ay), Math.max(r.P.m / 2 * sc, 6), 0, 2 * Math.PI); c.stroke();
+    // fabric z（方向與相對大小）
+    const zn = Math.hypot(h.zx, h.zy);
+    if (zn > 1e-6 && r.P.fabric) {
+      const Lz = Math.min(zn / (Math.SQRT2 * r.S.zmax), 1) * (r.P.M / 2) * 0.9;
+      const ex = h.zx / zn * Lz, ey = h.zy / zn * Lz;
+      c.beginPath(); c.strokeStyle = ink; c.lineWidth = 1.6; c.moveTo(A.X(0), A.Y(0)); c.lineTo(A.X(ex), A.Y(ey)); c.stroke();
+      const ang = Math.atan2(A.Y(ey) - A.Y(0), A.X(ex) - A.X(0));
+      c.beginPath(); c.fillStyle = ink; c.moveTo(A.X(ex), A.Y(ey));
+      c.lineTo(A.X(ex) - 9 * Math.cos(ang - 0.4), A.Y(ey) - 9 * Math.sin(ang - 0.4)); c.lineTo(A.X(ex) - 9 * Math.cos(ang + 0.4), A.Y(ey) - 9 * Math.sin(ang + 0.4)); c.fill();
+    }
+    dot(A, r.ryy[i], r.rxy[i], red, 4); A.done();
+    // 讀值
+    const mode = { contraction: '收縮', dilation: '剪脹', elastic: '彈性' }[h.mode] || h.mode;
+    const now = [
+      r.test === 'cyc' ? ['循環數 N', fmt(h.N, 2)] : ['τ／σ′v', fmt(h.tau / h.sv, 3)],
+      ['γ (%)', fmt(h.gam, 3)], ['τ (kPa)', fmt(h.tau, 2)], ['σ′v (kPa)', fmt(h.sv, 2)], [r.test === 'md' ? 'εv (%)' : 'ru', r.test === 'md' ? fmt(h.ev, 3) : fmt(h.ru, 3)],
+      ['p (kPa)', fmt(h.p, 2)], ['ξR', fmt(sf.xi, 3)], ['M<sup>b</sup>／M<sup>d</sup>', `${fmt(sf.Mb, 2)}／${fmt(sf.Md, 2)}`],
+      ['z<sub>cum</sub>', fmt(h.zcum, 2)], ['塑性狀態', `<span class="mode-chip mode-${h.mode}">${mode}</span>`]];
+    $('labNow').innerHTML = now.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:18px">${v}</div></div>`).join('');
+    $('tlRead').textContent = r.test === 'cyc' ? `N ${fmt(h.N, 2)}、γ ${fmt(h.gam, 2)} %` : `γ ${fmt(h.gam, 2)} %`;
+  }
+
+  $('scrub').addEventListener('input', () => { stop(); idx = +$('scrub').value; draw(); });
+  function stop() { playing = false; $('playBtn').textContent = '播放'; }
+  function tick() {
+    if (!playing || !run) return;
+    const n = run.hist.length, sp = +$('speed').value;
+    idx = Math.min(n - 1, idx + Math.max(1, Math.round(n / 900 * sp)));
+    $('scrub').value = idx; draw();
+    if (idx >= n - 1) { stop(); return; }
+    requestAnimationFrame(tick);
+  }
+  $('playBtn').addEventListener('click', () => {
+    if (!run) return;
+    if (playing) { stop(); return; }
+    if (idx >= run.hist.length - 1) idx = 0;
+    playing = true; $('playBtn').textContent = '暫停'; requestAnimationFrame(tick);
+  });
+
+  /* ---------------- 6.8 CRR–N ---------------- */
+  const REF_LEAP = [[0.2224, 4.67], [0.2036, 5.69], [0.187, 6.72], [0.1726, 7.75], [0.1587, 10.69], [0.1451, 14.23]];
+  let crrSets = [];
+  function crrParText() {
+    const P = params();
+    $('crrPar').innerHTML = `目前參數：D<sub>R0</sub> ${P.Dr}、G0 ${P.G0}、hp0 ${P.hp0}、σ′v0 ${$('pSv').value} kPa、K0 ${$('pK0').value}、nb ${P.nb}、φcv ${P.phicv}、fabric ${fab ? 'On' : 'Off'}（改參數請到上面的實驗室，或按預設情境）`;
+  }
+  function fit(pts) {
+    const ok = pts.filter(p => p[1] != null && p[1] > 0);
+    if (ok.length < 2) return null;
+    const xs = ok.map(p => Math.log(p[1])), ys = ok.map(p => Math.log(p[0]));
+    const n = xs.length, mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+    let sxy = 0, sxx = 0; xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; });
+    const slope = sxy / sxx, b = -slope, a = Math.exp(my - slope * mx);
+    return { a, b, crr15: a * Math.pow(15, -b) };
+  }
+  function crrRun(mults) {
+    const list = $('crrList').value.split(/[,，\s]+/).map(Number).filter(v => v > 0 && v < 1).sort((a, b) => a - b);
+    if (!list.length) return;
+    const base = params(), sv0 = +$('pSv').value, K0 = +$('pK0').value, al = +$('pAl').value;
+    crrSets = mults.map(m => ({ m, pts: [] }));
+    const jobs = []; crrSets.forEach(s => list.forEach(c => jobs.push([s, c])));
+    let k = 0;
+    const step = () => {
+      if (k >= jobs.length) { $('crrMsg').textContent = ''; drawCRR(); return; }
+      const [s, c] = jobs[k++];
+      const P = Object.assign({}, base, { hp0: base.hp0 * s.m });
+      const r = PM4.runCyclic(P, { sv0, K0, csr: c, alpha: al, nmax: 150, rec: 0 });
+      s.pts.push([c, r.nLiq]);
+      $('crrMsg').textContent = `計算中 ${k}／${jobs.length}`;
+      drawCRR(); setTimeout(step, 0);
+    };
+    step();
+  }
+  function drawCRR() {
+    const cv = $('crrCv');
+    const all = crrSets.flatMap(s => s.pts.map(p => p[0]));
+    if ($('crrRef').checked) REF_LEAP.forEach(p => all.push(p[0]));
+    const yr = all.length ? [Math.max(0, Math.min(...all) * 0.85), Math.max(...all) * 1.12] : [0, 0.3];
+    const A = axes(cv, { xr: [1, 200], yr, xl: '達 γ = 3% 的循環數 N（對數）', yl: 'CSR', logx: true });
+    const stats = [], base0 = params();
+    crrSets.forEach((s, j) => {
+      const col = crrSets.length > 1 ? [css('--red'), css('--blue'), css('--ink')][j] : css('--blue');
+      const f = fit(s.pts);
+      if (f) { const ns = [], cs = []; for (let lg = 0; lg <= 2.31; lg += 0.02) { const N = Math.pow(10, lg); ns.push(N); cs.push(f.a * Math.pow(N, -f.b)); } line(A, ns, cs, col, 1.2); }
+      s.pts.forEach(p => { if (p[1] != null) dot(A, Math.min(Math.max(p[1], 1), 200), p[0], col, 4.5); else dot(A, 200, p[0], col, 4.5, true); });
+      stats.push([`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px"></span>hp0 × ${s.m}（${fmt(base0.hp0 * s.m, 4)}）`, f ? `CRR<sub>15</sub> ${fmt(f.crr15, 3)}` : '—', f ? `b ${fmt(f.b, 3)}` : '']);
+    });
+    if ($('crrRef').checked) REF_LEAP.forEach(p => dot(A, p[1], p[0], css('--ink'), 4.5, true));
+    line(A, [15, 15], [-1, 2], css('--gray'), 1, [3, 3]);
+    A.done();
+    $('crrStats').innerHTML = stats.map(([k, v, b]) => `<div class="stat"><div class="k">${k}</div><div class="v" style="font-size:18px">${v}</div><div class="k" style="min-height:0">${b}</div></div>`).join('')
+      + ($('crrRef').checked ? '<div class="stat"><div class="k">空心黑點</div><div class="v" style="font-size:15px">PLAXIS SoilTest</div></div>' : '')
+      + '<div class="stat"><div class="k">空心點在 N = 200</div><div class="v" style="font-size:15px">150 圈內未液化</div></div>';
+  }
+  $('crrRun').addEventListener('click', () => { crrParText(); crrRun([1]); });
+  $('crrHp').addEventListener('click', () => { crrParText(); crrRun([0.5, 1, 2]); });
+  $('crrRef').addEventListener('change', drawCRR);
+
+  /* ---------------- 起始與重畫 ---------------- */
+  function redrawAll() { updState(); draw(); if (crrSets.length) drawCRR(); else axes($('crrCv'), { xr: [1, 200], yr: [0, 0.3], xl: '達 γ = 3% 的循環數 N（對數）', yl: 'CSR', logx: true }).done(); }
+  document.addEventListener('themechange', () => requestAnimationFrame(redrawAll));
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => requestAnimationFrame(redrawAll)); } catch (e) { }
+  let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(redrawAll, 120); });
+  function start() {
+    syncOut(); showModeCtrls(); crrParText();
+    applyPreset('cyc55');
+    redrawAll();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
+</script>
+</body>
+</html>

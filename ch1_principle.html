@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Principle of Numerical Simulation · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+/* ---- 第 1 章專用：示意圖線條（走 CSS 變數，深淺色都可讀） ---- */
+.ch1 svg text { fill: var(--ink); font-size: 13px; }
+.ch1 svg text.s { fill: var(--muted); font-size: 12.5px; }
+.ch1 svg text.b { font-weight: 700; }
+.ch1 svg text.acc { fill: var(--blue); }
+.ch1 svg text.red { fill: var(--red); }
+.ch1 .ln { stroke: var(--ink); stroke-width: 1.4; fill: none; }
+.ch1 .ln2 { stroke: var(--line); stroke-width: 1.4; }
+.ch1 .ac { stroke: var(--blue); stroke-width: 2; fill: none; }
+.ch1 .rd { stroke: var(--red); stroke-width: 2; fill: none; }
+.ch1 .thin { stroke: var(--gray); stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+.ch1 .softf { fill: var(--accent-soft); }
+.ch1 .bgf { fill: var(--inset); }
+.ch1 .grayf { fill: var(--pband); }
+.ch1 .inkf { fill: var(--ink); }
+.ch1 .acf { fill: var(--blue); }
+.ch1 .rdf { fill: var(--red); }
+.eq-s { font-size: 14px; color: var(--muted); margin-top: -.4em; }
+.mini { font-size: 14px; color: var(--muted); }
+ol.flow { counter-reset: f; list-style: none; padding: 0; margin: 1.2em 0; max-width: var(--measure); }
+ol.flow li { counter-increment: f; position: relative; padding: 9px 14px 9px 46px; margin: 6px 0; border-radius: 12px; background: var(--tile); line-height: 1.55; }
+ol.flow li::before { content: counter(f); position: absolute; left: 14px; top: 9px; font-family: var(--font-display); font-weight: 700; color: var(--accent); }
+ol.flow li.loop { margin-left: 26px; background: var(--accent-soft); }
+/* ---- 互動視窗 ---- */
+#lab .btnrow .btn { font-size: 13px; padding: 5px 13px; }
+#lab .seg { display: inline-flex; gap: 2px; background: var(--inset); border-radius: 10px; padding: 3px; }
+#lab .seg button { border: 0; background: none; padding: 5px 12px; font: inherit; font-size: 13.5px; color: var(--ink); border-radius: 8px; cursor: pointer; }
+#lab .seg button[aria-pressed="true"] { background: var(--tile); box-shadow: 0 1px 3px rgba(0,0,0,.14); font-weight: 600; }
+#lab .toggles { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 4px 0 14px; font-size: 14px; align-items: center; }
+#lab .toggles .tl { color: var(--muted); margin-right: 6px; }
+#lab .status { border-radius: 14px; padding: 10px 16px; margin: 10px 0 4px; font-weight: 600; background: var(--inset); }
+#lab .status.ok { color: var(--green); }
+#lab .status.bad { color: var(--warn); }
+#lab .plot h5 { margin: 6px 0 0; font-size: 13.5px; font-weight: 600; color: var(--muted); text-align: center; }
+#lab .stepsel { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; font-size: 14px; margin: 14px 0 4px; }
+#lab .stepsel label { color: var(--muted); white-space: nowrap; }
+#lab .stepsel output { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 6em; text-align: right; }
+#lab table.at { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+#lab table.at td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#lab table.at td:nth-child(odd) { color: var(--muted); }
+#lab table.at td:nth-child(even) { font-weight: 600; text-align: right; }
+#lab .atwrap { background: var(--inset); border-radius: 14px; padding: 6px 8px; margin-top: 6px; }
+#lab .athead { font-size: 13px; font-weight: 600; color: var(--orange); margin: 12px 0 0; }
+.legend-inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; font-size: 12.5px; color: var(--muted); }
+.legend-inline svg { width: 26px; height: 10px; }
+</style>
+</head>
+<body data-page="ch1" data-root="" data-title="1 · Principle of Numerical Simulation">
+
+<main class="ch1">
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 1</div>
+  <h1>Principle of Numerical Simulation</h1>
+  <p class="lede"><b>PLAXIS 一直在處理同一個量：不平衡力。</b>每個施工階段產生的不平衡力被切成許多載重步，每一步反覆迭代到平衡；組成律只在元素內的應力點上計算。</p>
+  <div class="callout question"><div class="ct">這一章要回答</div><p>按下 Calculate 之後，PLAXIS 到底在算什麼？Active tasks 視窗上的 ΣMstage、Stiffness、Global error 各代表什麼，算不下去時又該從哪裡找原因？</p></div>
+</header>
+
+<!-- ============================================================ 1.1 -->
+<section class="sec" id="s1" data-num="1.1" data-short="為什麼要數值模擬">
+  <div class="sec-head"><span class="sec-num">1.1</span><h2>為什麼大地工程需要數值模擬</h2></div>
+  <p>土壤與岩體不是簡單材料：勁度隨圍壓與應變改變、行為與應力歷史有關、孔隙水使問題變成耦合問題，層理與節理又讓參數在空間上不均勻。封閉解（Terzaghi 壓密、Boussinesq、Rankine、Prandtl 承載力）必須假設均質土層、常數參數、簡單幾何與一次載重，真實工程四項都不成立。</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>非線性來源</th><th>出現在方程式哪裡</th><th>數值上的後果</th></tr>
+    <tr><td>材料</td><td>組成矩陣 \(D^{ep}\) 隨應力、塑性應變改變</td><td>每一步要做應力回傳，勁度要更新</td></tr>
+    <tr><td>幾何</td><td>應變–位移關係出現高次項，積分域隨變形改變</td><td>需要大變形公式（Updated mesh）</td></tr>
+    <tr><td>邊界</td><td>接觸、張開、滑動的狀態事先未知</td><td>開關型非線性，容易不收斂</td></tr>
+    <tr><td>耦合</td><td>滲透係數、壓縮性隨孔隙比改變</td><td>壓密方程式變成非線性擴散方程式</td></tr>
+  </table></div>
+  <p>每一種非線性都讓勁度矩陣依賴尚未求得的解，所以線性問題 \(K\,u=f\) 一次就能解，非線性問題只能反覆迭代求殘差 \(R(u)=0\)。這就是 PLAXIS 計算視窗裡「步」與「迭代」的來源（1.5 節）。</p>
+  <div class="grid2">
+    <div class="card"><h4>封閉解仍是驗證的基準</h4><p>數值模型簡化到封閉解成立的情況時，必須重現解析解，例如均質彈性地盤的應力、條形基礎的 \((2+\pi)s_u\)。這叫驗證（verification）。</p></div>
+    <div class="card"><h4>選方法看主導的物理機制</h4><p>開挖、路堤、基礎與分階施工用有限元素法（PLAXIS、Abaqus、OpenSees）；顆粒機制用 DEM；極大變形與流動用 MPM。不是看手邊有哪套軟體。</p></div>
+  </div>
+  <h3>驗證、率定、確認</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>步驟</th><th>回答的問題</th><th>怎麼做</th></tr>
+    <tr><td>驗證 verification</td><td>方程式解對了沒？</td><td>與解析解比對；做網格與步長加密研究。屬於數學問題</td></tr>
+    <tr><td>率定 calibration</td><td>參數對了沒？</td><td>用組成律模擬元素試驗（三軸、壓密、反覆單剪），調整參數到吻合實測</td></tr>
+    <tr><td>確認 validation</td><td>這組方程式適用這個問題嗎？</td><td>與「獨立的」現地監測或物理模型比對，不能是率定時用過的資料</td></tr>
+  </table></div>
+  <div class="callout intuition"><div class="ct">參數是「模型的參數」</div><p>同一組三軸試驗，換一個組成律會率定出不同的數字。MC 的 E′ 是割線勁度、PM4Sand 的 \(G_0\) 是小應變勁度，兩者不能互相套用（第 5、6 章）。</p></div>
+</section>
+
+<!-- ============================================================ 1.2 -->
+<section class="sec" id="s2" data-num="1.2" data-short="邊界值問題與弱形式">
+  <div class="sec-head"><span class="sec-num">1.2</span><h2>邊界值問題：從強形式到虛功方程</h2></div>
+  <p>每個大地工程的邊界值問題都由六項組成：平衡、相容、組成律、有效應力原理、流體連續（含 Darcy 定律），以及邊界與初始條件。平衡、相容、組成律與邊界條件每種分析都要用；有效應力原理與流體連續要不要用，取決於下面兩個彼此獨立的選擇。</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>關係</th><th>式子</th><th>意義</th></tr>
+    <tr><td>平衡</td><td>\(L^{T}\sigma + b = 0\)</td><td>應力的空間導數與體積力 \(b\) 平衡</td></tr>
+    <tr><td>相容</td><td>\(\varepsilon = L\,u\)</td><td>應變是位移的導數</td></tr>
+    <tr><td>組成律</td><td>\(\dot\sigma' = D\,\dot\varepsilon\)</td><td>應力率與應變率的關係；MC、PM4Sand 都在這裡進來</td></tr>
+    <tr><td>有效應力</td><td>\(\sigma = \sigma' + m\,p_w\)</td><td>PLAXIS 以拉為正，壓應力與孔隙水壓為負</td></tr>
+  </table></div>
+  <h3>排水條件與應力表示是兩件事</h3>
+  <ul>
+    <li><b>排水條件</b>（排水／不排水／壓密）：超額孔隙水壓會不會產生、會不會隨時間消散。這是現場條件，由載重時間與排水時間的比值決定。</li>
+    <li><b>應力表示</b>（有效應力分析／總應力分析）：組成律用 \(\sigma'\) 還是 \(\sigma\) 來寫。這是建模的選擇。</li>
+  </ul>
+  <p>實際能用的組合如下表。排水分析一定是有效應力分析：地下水位以下的穩態水壓仍要靠有效應力原理扣掉，只是沒有超額水壓。不排水分析則兩種表示都可以用，在 PLAXIS 裡就是 Drainage type 的 Undrained (A)、(B)、(C)。</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>PLAXIS Drainage type</th><th>排水條件</th><th>應力表示</th><th>孔隙水壓</th><th>勁度／強度參數</th><th>用到的式子</th></tr>
+    <tr><td>Drained</td><td>排水</td><td>有效應力</td><td>只有穩態水壓</td><td>\(E'\)、\(\nu'\)／\(c'\)、\(\varphi'\)</td><td>前三項＋有效應力原理</td></tr>
+    <tr><td>Undrained (A)</td><td>不排水</td><td>有效應力</td><td>穩態＋超額（由體積應變與水的體積模數算出）</td><td>\(E'\)、\(\nu'\)／\(c'\)、\(\varphi'\)；\(s_u\) 是輸出</td><td>前三項＋有效應力原理＋不排水限制</td></tr>
+    <tr><td>Undrained (B)</td><td>不排水</td><td>有效應力（勁度）</td><td>穩態＋超額</td><td>\(E'\)、\(\nu'\)／\(s_u\) 直接輸入</td><td>同上</td></tr>
+    <tr><td>Undrained (C)</td><td>不排水</td><td>總應力</td><td>不分開計算</td><td>\(E_u\)、\(\nu_u \approx 0.495\)／\(s_u\)</td><td>只有前三項</td></tr>
+    <tr><td>Consolidation（計算類型）</td><td>部分排水，隨時間變化</td><td>有效應力</td><td>超額水壓隨時間消散</td><td>有效參數＋滲透係數 \(k\)</td><td>六項全部</td></tr>
+  </table></div>
+  <p>所以「不排水」不等於「總應力」：Undrained (A) 是不排水的有效應力分析，可以算出超額孔隙水壓；Undrained (C) 是不排水的總應力分析，算不出水壓，只能得到總應力與變形。</p>
+  <h3>強形式解不出來</h3>
+  <p>強形式要求每一點都平衡，位移要能微分兩次。材料介面（硬層壓在軟層上）位移連續但斜率突變，集中載重使應力奇異，非線性組成律使 \(D\) 依賴未知的應力，所以真實幾何沒有解析解。</p>
+  <h3>弱形式：平均平衡</h3>
+  <p>把平衡式乘上任意容許的虛位移 \(\delta u\) 後積分，再分部積分，得到虛功方程。左邊是內虛功，右邊是體積力與邊界曳力 \(t\) 做的外虛功：</p>
+  <div class="eqbox">\[ \int_V \delta\varepsilon^{T}\sigma\,dV = \int_V \delta u^{T} b\,dV + \int_S \delta u^{T} t\,dS \]</div>
+  <ul>
+    <li>對無限多個 \(\delta u\) 都成立，等價於強形式；只對有限個權函數成立，就是有限元素法的近似。</li>
+    <li>位移只剩一次微分，連續性要求由 \(C^1\) 降到 \(C^0\)：層界上的折角變成容許的。</li>
+    <li>代價：整體與節點平衡精確成立，元素內逐點平衡只近似成立。</li>
+  </ul>
+  <h3>兩類邊界條件</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th></th><th>本質（Dirichlet）</th><th>自然（Neumann）</th></tr>
+    <tr><td>變形問題給定</td><td>位移 \(u=\bar u\)（固定、滾支）</td><td>曳力 \(\sigma n = \bar t\)（分布載重）</td></tr>
+    <tr><td>滲流問題給定</td><td>水頭</td><td>流量</td></tr>
+    <tr><td>什麼都不給時</td><td>—</td><td>變形：\(\bar t = 0\)，即自由表面；滲流：不透水</td></tr>
+    <tr><td>PLAXIS 設定位置</td><td>Model conditions › Deformations（預設底部全固定、側邊滾支）</td><td>Loads、Model conditions › Groundwater flow</td></tr>
+  </table></div>
+  <div class="callout pitfall"><div class="ct">自由表面不是「沒有邊界條件」</div><p>洞室開挖面是 \(\bar t = 0\) 的曳力條件，由弱形式自動滿足。開挖之所以產生變形，是因為原本作用在這個面上的支撐力被移除，變成不平衡力（1.10 節）。</p></div>
+  <div class="callout link"><div class="ct">初始狀態也是條件</div><p>鋼架加載前沒有應力；岩土在動手前已在自重下平衡、帶著完整的應力場。每個應力點的勁度與降伏面位置都由初始應力決定，初始應力錯了，後面每個階段都錯（1.11 節）。</p></div>
+</section>
+
+<!-- ============================================================ 1.3 -->
+<section class="sec" id="s3" data-num="1.3" data-short="離散化與應力點">
+  <div class="sec-head"><span class="sec-num">1.3</span><h2>離散化：元素、形狀函數與應力點</h2></div>
+  <p>元素內的位移由節點位移 \(v\) 內插：\(u = N v\)，應變 \(\varepsilon = B v\)，\(B\) 是形狀函數的導數。代入虛功方程、消去任意的 \(\delta v\)，增量形式寫成：</p>
+  <div class="eqbox">\[ \underbrace{\int B^{T}\Delta\sigma\,dV}_{\text{本步要求的應力增量}} = \underbrace{\int N^{T} b^{i}\,dV + \int N^{T} t^{i}\,dS}_{\text{目前的外力 } f_{ex}^{i}} - \underbrace{\int B^{T}\sigma^{i-1}\,dV}_{\text{上一步的內力 } f_{in}^{i-1}} \]</div>
+  <div class="callout intuition"><div class="ct">不平衡力</div><p>外力與內力的差 \(f_{ex}-f_{in}\) 就是要靠應力增量去平衡的<b>不平衡力（out-of-balance force）</b>。PLAXIS 的步長控制、收斂判準、ΣMstage 全都圍繞這個量。</p></div>
+  <h3>最簡單的例子：二節點桿件</h3>
+  <div class="pair pair2">
+    <div class="pt">
+      <p>長度 \(L\)、斷面積 \(A\)、楊氏模數 \(E\)。線性形狀函數 \(N_1 = 1 - x/L\)、\(N_2 = x/L\)，應變在元素內為常數：</p>
+      <div class="eqbox">\[ \varepsilon = \frac{a_2-a_1}{L},\qquad B=\left[-\tfrac{1}{L},\ \tfrac{1}{L}\right] \]
+      \[ K^{e}=\int_0^L B^{T}EB\,A\,dx=\frac{EA}{L}\begin{bmatrix}1&-1\\-1&1\end{bmatrix} \]</div>
+      <p>就是大一學過的軸向彈簧 \(EA/L\)。每列和為零：兩節點推相同距離（剛體平移）不產生力。其他元素都是同一個計算，只是節點更多、維度更高、積分要用數值做。</p>
+    </div>
+    <div class="pv">
+      <div class="tablewrap"><table class="data">
+        <tr><th>符號</th><th>是什麼</th><th>由誰決定</th></tr>
+        <tr><td>\(N\)</td><td>形狀函數</td><td>選元素型式時就決定</td></tr>
+        <tr><td>\(v\)</td><td>節點位移，整個問題的未知數</td><td>求解</td></tr>
+        <tr><td>\(B\)</td><td>形狀函數的導數</td><td>元素幾何（Jacobian）</td></tr>
+        <tr><td>\(D\)</td><td>組成矩陣</td><td>材料模型與目前的應力</td></tr>
+        <tr><td>\(K=\int B^{T}DB\,dV\)</td><td>勁度矩陣，稀疏、組裝而成</td><td>以 Gauss 點數值積分</td></tr>
+      </table></div>
+    </div>
+  </div>
+  <h3>PLAXIS 的元素</h3>
+  <figure class="shot"><img src="assets/img/ch1/elements.png" alt="大地工程常用元素比較" loading="lazy"><figcaption>常用元素：節點越多，每個元素越準、需要的元素越少，但勁度矩陣更密、要呼叫組成律的應力點更多。</figcaption></figure>
+  <div class="tablewrap"><table class="data">
+    <tr><th>元素</th><th>位移內插</th><th>應力點（Gauss 點）</th><th>使用時機</th></tr>
+    <tr class="hl"><td>15 節點三角形</td><td>四次</td><td class="num">12</td><td>PLAXIS 2D 預設；應力與破壞載重較準，適合破壞問題與不排水分析</td></tr>
+    <tr><td>6 節點三角形</td><td>二次</td><td class="num">3</td><td>計算較快；同樣元素數時精度較低，不排水或破壞問題偏硬</td></tr>
+  </table></div>
+  <p>光明地下廠房的 plan_e 模型用 15 節點三角形：每個元素 12 個應力點，Output 裡塑性點、張力點的統計都以應力點為單位。同樣 0.5 m 的元素，15 節點三角形的自由度遠多於 OpenSees 的 4 節點一點積分 SSPquad。</p>
+  <h3>答案在應力點，不在等值線圖</h3>
+  <figure class="shot"><img src="assets/img/ch1/contour_vs_gauss.png" alt="等值線圖與積分點" loading="lazy"><figcaption>組成律只在積分點計算；節點上的應力是外插再平均得到的，會把層界、剪力帶等真實的不連續抹平。</figcaption></figure>
+  <ol class="steps">
+    <li><b>積分點</b>：組成律在 Gauss 點算出應力（降伏、回傳）。</li>
+    <li><b>外插</b>：由 Gauss 點外插到元素角點。</li>
+    <li><b>節點平均</b>：相鄰元素在共用節點的不同值取平均。</li>
+    <li><b>等值線</b>：在節點值之間內插上色。只有第 1 步是組成律算的。</li>
+  </ol>
+  <p>應力是位移的導數，收斂慢一階：沉陷誤差 1 % 的網格，同一處應力可能差 10 %。看塑性區要回到應力點本身（Output 的 Plastic points），報告應力時讀積分點值，畫等值線時要說明它被平滑過。</p>
+</section>
+
+<!-- ============================================================ 1.4 -->
+<section class="sec" id="s4" data-num="1.4" data-short="一個 phase 怎麼算完">
+  <div class="sec-head"><span class="sec-num">1.4</span><h2>總覽：一個 phase 怎麼算完</h2></div>
+  <p>PLAXIS 的非線性計算分成四層。分析不收斂時，先找出問題卡在哪一層。</p>
+  <figure class="diagram">
+  <svg viewBox="0 0 760 300" width="760" role="img" aria-label="Phase、Step、Iteration、應力點的四層結構">
+    <rect x="10" y="10" width="740" height="280" rx="12" class="softf" style="stroke:var(--accent);stroke-width:1.4"/>
+    <text x="26" y="34" class="b">Phase（施工階段）</text>
+    <text x="26" y="54" class="s">目標：把這個階段的不平衡力全部加完，ΣMstage 從 0 走到 1</text>
+    <rect x="30" y="70" width="700" height="205" rx="10" class="bgf ln2"/>
+    <text x="46" y="94" class="b">Step（載重步）</text>
+    <text x="46" y="113" class="s">每一步加一小段 ΔΣMstage，大小由程式依迭代次數自動調整</text>
+    <rect x="50" y="128" width="410" height="132" rx="10" class="softf ln2"/>
+    <text x="66" y="152" class="b">Iteration（迭代）</text>
+    <text x="66" y="171" class="s">K·δv = f_ex − f_in，反覆修正到不平衡力夠小</text>
+    <rect x="70" y="184" width="370" height="62" rx="8" class="bgf ln2"/>
+    <text x="86" y="208" class="b">應力點（Gauss 點）</text>
+    <text x="86" y="228" class="s">組成律在這裡計算：彈性試算 → 回傳降伏面</text>
+    <text x="490" y="160">一個 step 通常迭代</text>
+    <text x="490" y="182" class="b acc">6 到 15 次</text>
+    <text x="490" y="214">少於 6 次 → 下一步加倍</text>
+    <text x="490" y="236">多於 15 次 → 這一步減半</text>
+  </svg>
+  <figcaption>由外到內是 Phase → Step → Iteration → 應力點。組成律只在最內層運作，外面三層都在處理「怎麼把力加上去、算到平衡」。</figcaption>
+  </figure>
+  <div class="tablewrap"><table class="data">
+    <tr><th>層次</th><th>要達成什麼</th><th>由什麼控制</th><th>失敗時的訊息或徵兆</th></tr>
+    <tr><td>Phase</td><td>ΣMstage = 1（Safety 則是跑完指定步數）</td><td>Max steps、Arc-length、Max unloading steps</td><td>Soil body collapses、Not enough load steps、Load advancement procedure fails</td></tr>
+    <tr><td>Step</td><td>在 Desired min～max 次迭代內收斂</td><td>Desired min／max iterations、Max load fraction per step</td><td>步長一直減半，ΣMstage 幾乎不動</td></tr>
+    <tr><td>Iteration</td><td>Global error ≤ Tolerated error，且不準確塑性點夠少</td><td>Tolerated error、Max iterations、Over-relaxation</td><td>Global error 降不下來</td></tr>
+    <tr><td>應力點</td><td>應力落在降伏面上或面內</td><td>組成律與材料參數</td><td>Inaccurate 塑性點過多、張力點與 apex 點大量出現</td></tr>
+  </table></div>
+</section>
+
+<!-- ============================================================ 1.5 -->
+<section class="sec" id="s5" data-num="1.5" data-short="Step 與 Iteration">
+  <div class="sec-head"><span class="sec-num">1.5</span><h2>Step 與 Iteration：整體迭代</h2></div>
+  <p>勁度事先不知道，所以每一步都要迭代。第 \(i\) 步的第 \(j\) 次迭代：</p>
+  <div class="eqbox">\[ K\,\delta v^{j} = f_{ex}^{i} - f_{in}^{j-1}, \qquad \Delta v^{i} = \sum_{j}\delta v^{j} \]</div>
+  <p>\(\delta v^{j}\) 是這次迭代的位移修正，累加起來就是這一步的位移增量。迭代時用哪一個 \(K\)，決定了每次迭代的成本與需要的迭代次數：</p>
+  <figure class="shot"><img src="assets/img/ch1/newton_variants.png" alt="三種求解步驟" loading="lazy"><figcaption>Full Newton–Raphson 每次迭代重組切線勁度（二次收斂、每次都貴）；修正 Newton–Raphson 每步組一次；初始勁度法全程用彈性勁度（慢但穩健）。</figcaption></figure>
+  <div class="tablewrap"><table class="data">
+    <tr><th>做法</th><th>勁度矩陣</th><th>收斂</th><th>特點</th></tr>
+    <tr><td>Full Newton–Raphson</td><td>每次迭代重組、重分解切線勁度 \(K_T\)</td><td>二次：\(10^{-2}\to10^{-4}\to10^{-8}\)</td><td>每次迭代貴；接近破壞時 \(K_T\) 奇異；非關聯流動使 \(K_T\) 不對稱</td></tr>
+    <tr><td>修正 Newton–Raphson</td><td>每步組一次 \(K_T\)</td><td>線性</td><td>輕度非線性時實際耗時常最短</td></tr>
+    <tr class="hl"><td>初始勁度（PLAXIS）</td><td>彈性勁度 \(K=\int B^{T}D^{e}B\,dV\)</td><td>線性，接近破壞時變慢</td><td>只要材料勁度不增加都穩健，非關聯塑性也一樣</td></tr>
+  </table></div>
+  <h3>PLAXIS 用彈性勁度矩陣迭代</h3>
+  <ul>
+    <li>MC 在彈性範圍內是線性的，<b>勁度矩陣只要在第一步之前組成並分解一次</b>，之後每次迭代只做回代，這是 MC 計算快的原因。</li>
+    <li>彈性勁度比真實的割線勁度硬，每次迭代只解掉部分不平衡力，所以要配合加速技巧減少迭代次數。</li>
+  </ul>
+  <div class="tablewrap"><table class="data">
+    <tr><th>技巧</th><th>做法</th><th>預設</th></tr>
+    <tr><td>Over-relaxation</td><td>刻意把每次的修正量放大，因為用彈性勁度只解掉「目前的不平衡」通常還離平衡很遠</td><td>1.2（理論上限 2.0；φ 高時要更小）</td></tr>
+    <tr><td>Extrapolation</td><td>同一種載重延續到下一步時，用上一步的位移解當第一次估計</td><td>適用時自動使用</td></tr>
+    <tr><td>Arc-length control</td><td>接近破壞時自動調整載重比例，可以越過極限點（1.8 節）</td><td>開啟</td></tr>
+    <tr><td>Subspace accelerator</td><td>以修正 Newton 為基礎，再用前幾次迭代的位移增量加速；對局部破壞等強非線性最有效</td><td>子空間大小 3</td></tr>
+    <tr><td>Line search</td><td>每次迭代自動決定修正量的縮放比例；方向對、但步長衝過頭時有效</td><td>依版本設定</td></tr>
+    <tr><td>Gradual error reduction</td><td>容許誤差從 10 倍開始，到 phase 結束時線性降回設定值</td><td>關閉</td></tr>
+  </table></div>
+  <h3>一個 step 的完整流程</h3>
+  <ol class="flow">
+    <li>形成勁度矩陣 \(K=\int B^{T}D^{e}B\,dV\) 並分解（MC 只做一次）</li>
+    <li>新的一步：外力加上本步增量 \(f_{ex}^{i} = f_{ex}^{i-1} + \Delta f_{ex}\)，即 ΣMstage 增加一段</li>
+    <li>計算內力 \(f_{in} = \int B^{T}\sigma^{i-1}dV\) 與不平衡力；位移增量歸零</li>
+    <li class="loop">迭代：解 \(\delta v = K^{-1}(f_{ex}-f_{in})\)，累加位移增量 \(\Delta v\)</li>
+    <li class="loop">由位移算應變增量 \(\Delta\varepsilon = B\Delta v\)</li>
+    <li class="loop">每個應力點：彈性試算，超出降伏面就回傳（1.6 節）</li>
+    <li class="loop">由新應力算內力 \(f_{in}=\int B^{T}\sigma\,dV\) 與新的不平衡力</li>
+    <li class="loop">檢查 Global error 與不準確塑性點（1.7 節）；未達標準回到第 4 項</li>
+    <li>收斂：更新總位移、寫出結果；ΣMstage 未到 1 就進入下一步</li>
+  </ol>
+</section>
+
+<!-- ============================================================ 1.6 -->
+<section class="sec" id="s6" data-num="1.6" data-short="應力點回傳">
+  <div class="sec-head"><span class="sec-num">1.6</span><h2>應力點上的回傳計算</h2></div>
+  <p>整體迭代給每個應力點一個應變增量 \(\Delta\varepsilon\)，組成律要把它換成應力增量。PLAXIS 採<b>隱式積分</b>（後退 Euler，又稱回傳法 return mapping），塑性應變的方向取在<b>本步終點</b>的應力上：</p>
+  <div class="eqbox">\[ \Delta\sigma = D^{e}\left(\Delta\varepsilon - \Delta\varepsilon^{p}\right), \qquad \Delta\varepsilon^{p} = \Delta\lambda \left(\frac{\partial g}{\partial \sigma}\right)^{i} \]</div>
+  <div class="pair pair2">
+    <div class="pv">
+    <figure class="diagram" style="margin:0">
+    <svg viewBox="0 0 340 260" width="340" role="img" aria-label="試算應力回傳到降伏面">
+      <line x1="40" y1="225" x2="325" y2="225" class="ln"/>
+      <line x1="40" y1="225" x2="40" y2="15" class="ln"/>
+      <text x="312" y="245" class="s">p′</text><text x="20" y="24" class="s">q</text>
+      <line x1="40" y1="225" x2="300" y2="40" class="ac"/>
+      <text x="246" y="56" class="acc">f = 0</text>
+      <text x="200" y="210" class="s">彈性區 f &lt; 0</text>
+      <circle cx="150" cy="185" r="4.5" class="inkf"/>
+      <text x="108" y="204" class="s">σ i−1</text>
+      <line x1="150" y1="185" x2="170" y2="60" class="thin" style="stroke:var(--ink)"/>
+      <circle cx="170" cy="60" r="5" class="rdf"/>
+      <text x="178" y="56" class="red">σ tr（f &gt; 0）</text>
+      <line x1="170" y1="60" x2="189" y2="91" class="rd"/>
+      <circle cx="189" cy="91" r="5" class="acf"/>
+      <text x="196" y="110" class="acc">σ i（f = 0）</text>
+      <text x="52" y="120" class="s">彈性試算 Dᵉ·Δε</text>
+    </svg>
+    <figcaption>先假設整個增量都是彈性，得到試算應力；若在降伏面外，沿 \(D^{e}\,\partial g/\partial\sigma\) 方向拉回。</figcaption>
+    </figure>
+    </div>
+    <div class="pt">
+      <p><b>步驟一：彈性試算</b></p>
+      <div class="eqbox">\[ \sigma^{tr} = \sigma^{i-1} + D^{e}\Delta\varepsilon \]</div>
+      <p><b>步驟二：塑性修正</b>（只在 \(f(\sigma^{tr})&gt;0\) 時）</p>
+      <div class="eqbox">\[ \sigma^{i} = \sigma^{tr} - \frac{\langle f(\sigma^{tr})\rangle}{d+h}\,D^{e}\frac{\partial g}{\partial\sigma},\qquad d = \frac{\partial f}{\partial\sigma}^{T} D^{e}\frac{\partial g}{\partial\sigma} \]</div>
+      <p>\(\langle x\rangle\) 是 McCauley 括號：\(x\le 0\) 時為 0。\(h\) 是硬化參數，<b>MC 為完全塑性，\(h = 0\)</b>。好處是不必先找出「彈性轉塑性」的交點，而且對迭代有利。</p>
+    </div>
+  </div>
+  <div class="callout example"><div class="ct">MC 的角點與張力截斷</div><p>MC 的降伏面由六個平面組成，兩面相交處（角點）的法線方向不唯一。PLAXIS 不把角點修圓，而是讓應力回到角點時同時啟用兩個塑性勢函數。加上 tension cut-off 後還會出現受拉角點與 apex 點，這些點的回傳比平面上困難，數量多時迭代會變慢。細節見第 5 章。</p></div>
+  <h3>局部誤差：回傳結果與平衡應力差多少</h3>
+  <p>迭代中由整體平衡線性化得到的應力 \(\sigma_{eq}\)，和組成律真正回傳出來的應力 \(\sigma_{c}\) 不一定相同。兩者差太多的塑性點記為 <b>Inaccurate</b>（下一節的局部誤差）。同樣的應變增量，不同程式的回傳演算法（例如 OpenSees 在 Lode 角圓化的 MC）可能得到不同的應力，這是兩個程式結果比較時的先天差異之一。</p>
+</section>
+
+<!-- ============================================================ 1.7 -->
+<section class="sec" id="s7" data-num="1.7" data-short="收斂判準">
+  <div class="sec-head"><span class="sec-num">1.7</span><h2>收斂判準</h2></div>
+  <p>每次迭代後，PLAXIS 同時檢查<b>整體</b>與<b>局部</b>兩類誤差，兩者都低於容許值才算這一步收斂。</p>
+  <h3>整體誤差（Global error）</h3>
+  <div class="eqbox">\[ \text{Global error} = \frac{\lVert f_{ex}-f_{in}\rVert}{\lVert f_{active}\rVert + \text{CSP}\cdot\lVert f_{inactive}\rVert} \le \text{Tolerated error}\;(\text{預設 }0.01) \]</div>
+  <ul>
+    <li><b>Active loads</b>：本階段要加上的載重（本階段與前一階段的差）。開挖時就是停用元素造成的不平衡力。</li>
+    <li><b>Inactive loads</b>：前面各階段已經施加的載重。</li>
+    <li><b>CSP</b>（Current Stiffness Parameter，計算視窗上的 Stiffness）：</li>
+  </ul>
+  <div class="eqbox">\[ \text{CSP} = \frac{\int \Delta\varepsilon^{T}\Delta\sigma\,dV}{\int \Delta\varepsilon^{T}D^{e}\Delta\varepsilon\,dV} \]</div>
+  <p>全彈性時 CSP = 1，接近破壞時趨近 0，軟化時甚至為負。CSP 越小，分母越小，同樣的不平衡力算出的誤差越大，所以<b>塑性越多，判準反而越嚴</b>。</p>
+  <h3>局部誤差（不準確塑性點）</h3>
+  <div class="eqbox">\[ \text{Local error}_{j} = \frac{\lVert\sigma_{eq,j}-\sigma_{c,j}\rVert}{\max(\tau_{max,j},\;c,\;1\,\text{kPa})},\qquad N_{\text{inaccurate}} &lt; 0.1\times N_{\text{plastic}} + 3 \]</div>
+  <p>局部誤差大於 Tolerated error 的塑性點稱為不準確（Inaccurate）塑性點。例如 7259 個塑性點，容許 0.1 × 7259 + 3 ≈ 729 個不準確點，這就是 Active tasks 視窗 Tolerated 欄的數字。介面元素另外計算一組，判準相同。</p>
+  <div class="callout pitfall"><div class="ct">容許誤差是無聲的錯誤</div><p>殘差 5 % 就是 5 % 的平衡違反，程式不會提醒。Tolerated error 設得比 0.01 大，計算會變快，但結果可能根本不平衡；反過來，光明廠房 e6、e7 把 Tolerated error 降到 0.001，是為了確認結果不受容許誤差影響。破壞載重隨位移增加反而意外下降時，常是誤差累積造成的漂移，應以更小的容許誤差重算。下方 1.9 的互動視窗可以直接看到放寬容許誤差造成的不平衡。</p></div>
+</section>
+
+<!-- ============================================================ 1.8 -->
+<section class="sec" id="s8" data-num="1.8" data-short="步長與 Arc-length">
+  <div class="sec-head"><span class="sec-num">1.8</span><h2>自動步長與 Arc-length</h2></div>
+  <h3>步長怎麼調整</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>情況</th><th>判斷</th><th>處理</th></tr>
+    <tr><td>迭代次數 &lt; Desired min（預設 6）</td><td>步長太小</td><td>下一步載重增量 × 2</td></tr>
+    <tr><td>迭代超過 Desired max（預設 15）仍未收斂</td><td>步長太大</td><td>這一步載重增量 ÷ 2，重新迭代</td></tr>
+    <tr><td>介於兩者之間</td><td>步長合適</td><td>下一步沿用這個步長</td></tr>
+  </table></div>
+  <h3>數值控制參數（Numerical control parameters）</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>參數</th><th>預設</th><th>作用與調整時機</th></tr>
+    <tr><td>Tolerated error</td><td>0.01</td><td>整體與局部誤差的容許值</td></tr>
+    <tr><td>Max steps</td><td>Plastic 1000；Safety、Dynamics 100</td><td>Plastic 是上限，通常不會用完；Safety 一定跑滿這個步數</td></tr>
+    <tr><td>Max iterations</td><td>60</td><td>單一步的迭代上限。最後一步達到上限時出現 Maximum iterations reached in final step，結果可能不準</td></tr>
+    <tr><td>Desired min／max iterations</td><td>6／15</td><td>φ 低、曲線不夠平滑時調小；φ 高或高階模型時調大，同時把 Max iterations 提高到 80</td></tr>
+    <tr><td>Max load fraction per step</td><td>0.5</td><td>一步最多解掉多少比例的不平衡力。0.5 表示至少分 2 步；設 0.1 表示至少 10 步，可避免塑性區發展時一步跳太大</td></tr>
+    <tr><td>Over-relaxation factor</td><td>1.2</td><td>見 1.5 節</td></tr>
+    <tr><td>Arc-length control</td><td>On</td><td>Auto 模式在 CSP &lt; 0.5 時才啟用；載重控制的計算應該開啟</td></tr>
+    <tr><td>Max unloading steps</td><td>5</td><td>載重連續下降幾步才判定崩塌。破壞機制轉換時載重可能暫時下降，可視情況放大</td></tr>
+  </table></div>
+  <h3>為什麼需要 Arc-length</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 720 250" width="720" role="img" aria-label="載重控制與弧長控制的差別">
+    <g transform="translate(20,0)">
+      <line x1="30" y1="215" x2="320" y2="215" class="ln"/><line x1="30" y1="215" x2="30" y2="20" class="ln"/>
+      <text x="294" y="235" class="s">位移</text><text x="0" y="28" class="s">載重</text>
+      <path d="M30 215 C 90 120, 150 70, 230 62 S 300 64, 315 66" class="ln"/>
+      <line x1="30" y1="62" x2="320" y2="62" class="thin"/><text x="36" y="56" class="s">極限載重</text>
+      <line x1="30" y1="42" x2="320" y2="42" class="rd" stroke-dasharray="6 3"/>
+      <text x="110" y="34" class="red">載重控制：目標高於極限，找不到平衡解</text>
+      <text x="110" y="200" class="b">載重控制</text>
+    </g>
+    <g transform="translate(380,0)">
+      <line x1="30" y1="215" x2="320" y2="215" class="ln"/><line x1="30" y1="215" x2="30" y2="20" class="ln"/>
+      <text x="294" y="235" class="s">位移</text><text x="0" y="28" class="s">載重</text>
+      <path d="M30 215 C 90 120, 150 70, 230 62 S 300 64, 315 66" class="ln"/>
+      <circle cx="96" cy="135" r="4" class="acf"/><circle cx="160" cy="86" r="4" class="acf"/>
+      <circle cx="230" cy="62" r="4" class="acf"/><circle cx="300" cy="64" r="4" class="acf"/>
+      <path d="M96 135 A 70 70 0 0 1 160 86" class="ac" stroke-dasharray="5 3"/>
+      <path d="M160 86 A 75 75 0 0 1 230 62" class="ac" stroke-dasharray="5 3"/>
+      <path d="M230 62 A 70 70 0 0 1 300 64" class="ac" stroke-dasharray="5 3"/>
+      <text x="140" y="200" class="b">Arc-length 控制</text>
+      <text x="130" y="40" class="acc">由程式決定這一步能加多少載重</text>
+    </g>
+  </svg>
+  <figcaption>載重控制在接近極限時，要求的載重增量可能已超過結構能承受的值，迭代不會收斂。Arc-length 以「弧長」限制每一步，載重比例變成未知數，可以算到極限點，必要時讓載重下降。</figcaption>
+  </figure>
+  <div class="grid2">
+    <div class="card"><h4>開啟（預設）</h4><p>每步載重增量受弧長約束，ΣMstage 可以倒退，用來追出破壞載重。倒退的後果：ΣMstage 連續 Max unloading steps 步減少且 CSP &lt; 0.015 → 判定崩塌（Error 101）。</p></div>
+    <div class="card"><h4>關閉</h4><p>回到載重控制，ΣMstage 不能下降。結構其實正在破壞時，計算可能只是一直停在某個 ΣMstage 附近，直到步數用完。這時要看最後一步的變形自己判斷，提高 Max steps 重算沒有用。</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ 1.9 widget -->
+<section class="sec" id="s9" data-num="1.9" data-short="互動：迭代實驗室">
+  <div class="sec-head"><span class="sec-num">1.9</span><h2>互動：載重步與迭代實驗室</h2></div>
+  <p>把一個 phase 縮成最小的模型：12 根並聯的彈簧，每根代表一個應力點，降伏位移各不相同，所以整體載重–位移曲線會逐漸彎曲、最後到達極限載重 \(P_u\)。下面的程式照 1.5–1.8 節的規則計算：彈性勁度迭代、每個應力點回傳、Global error 判斷收斂、依迭代次數加倍或減半步長、CSP &lt; 0.5 時啟用 Arc-length。數值無因次：總彈性勁度 = 1、極限載重 \(P_u\) = 1。</p>
+  <div class="widget" id="lab">
+    <div class="w-head"><span class="tag">互動視窗</span><div class="wt">一個 Plastic phase：從 F₀ 加到 F₁</div></div>
+    <div class="w-body">
+      <div class="btnrow" id="presets"><span class="lbl">情境</span></div>
+      <div class="controls">
+        <div class="ctrl"><label for="F0">前階段已加載重 F₀／Pᵤ</label><input type="range" id="F0" min="0" max="0.8" step="0.05" value="0.3"><output for="F0"></output></div>
+        <div class="ctrl"><label for="F1">本階段目標 F₁／Pᵤ</label><input type="range" id="F1" min="0.1" max="1.2" step="0.01" value="0.8"><output for="F1"></output></div>
+        <div class="ctrl"><label for="maxFrac">Max load fraction per step</label><select id="maxFrac"><option>0.02</option><option>0.05</option><option>0.1</option><option>0.2</option><option selected>0.5</option><option>1</option></select></div>
+        <div class="ctrl"><label for="tol">Tolerated error</label><select id="tol"><option>0.001</option><option>0.005</option><option selected>0.01</option><option>0.05</option><option>0.1</option></select></div>
+        <div class="ctrl"><label for="desMin">Desired min iterations</label><input type="range" id="desMin" min="1" max="10" step="1" value="6"><output for="desMin"></output></div>
+        <div class="ctrl"><label for="desMax">Desired max iterations</label><input type="range" id="desMax" min="4" max="40" step="1" value="15"><output for="desMax"></output></div>
+        <div class="ctrl"><label for="omega">Over-relaxation factor</label><input type="range" id="omega" min="1" max="1.8" step="0.05" value="1.2"><output for="omega"></output></div>
+        <div class="ctrl"><label for="maxSteps">Max steps</label><select id="maxSteps"><option>50</option><option>100</option><option>300</option><option selected>1000</option></select></div>
+        <div class="ctrl"><label for="maxUnload">Max unloading steps</label><select id="maxUnload"><option>1</option><option>3</option><option selected>5</option><option>10</option><option>20</option></select></div>
+      </div>
+      <div class="toggles">
+        <span><span class="tl">Arc-length control</span><span class="seg" data-k="arc"><button type="button" data-v="1" aria-pressed="true">On</button><button type="button" data-v="0" aria-pressed="false">Off</button></span></span>
+        <span><span class="tl">迭代用的勁度</span><span class="seg" data-k="newton"><button type="button" data-v="initial" aria-pressed="true">彈性勁度（PLAXIS）</button><button type="button" data-v="tangent" aria-pressed="false">切線勁度（Full Newton）</button></span></span>
+        <span><span class="tl">應力點</span><span class="seg" data-k="soft"><button type="button" data-v="0" aria-pressed="true">完全塑性</button><button type="button" data-v="1" aria-pressed="false">峰後軟化</button></span></span>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="stats" id="stats"></div>
+      <div class="plot-row">
+        <div class="plot"><h5>載重–位移（灰：材料真實曲線；藍點：收斂的步）</h5><svg class="plot-svg" id="pA" viewBox="0 0 470 300"></svg></div>
+        <div class="plot"><h5>ΣMstage 與 CSP（Stiffness）對步數</h5><svg class="plot-svg" id="pB" viewBox="0 0 470 300"></svg>
+          <div class="plot-legend"><span class="li"><svg viewBox="0 0 28 12"><line x1="0" y1="6" x2="28" y2="6" class="s-blue" stroke-width="2"/></svg>ΣMstage</span><span class="li"><svg viewBox="0 0 28 12"><line x1="0" y1="6" x2="28" y2="6" class="s-ink" stroke-width="1.6" stroke-dasharray="5 3"/></svg>CSP</span></div></div>
+      </div>
+      <div class="plot-row">
+        <div class="plot"><h5>每一步的迭代次數（紅點：這一步減半重算的次數）</h5><svg class="plot-svg" id="pC" viewBox="0 0 470 300"></svg></div>
+        <div class="plot"><h5 id="pDh">選定步的 Global error 收斂歷程</h5><svg class="plot-svg" id="pD" viewBox="0 0 470 300"></svg></div>
+      </div>
+      <div class="stepsel"><label for="stepSel">查看第幾步</label><input type="range" id="stepSel" min="1" max="1" value="1"><output id="stepOut"></output></div>
+      <div class="athead">這一步結束時的 Active tasks 視窗（對應 1.13 節）</div>
+      <div class="atwrap"><table class="at" id="at"></table></div>
+      <p class="w-note">模型只有一個自由度、12 個應力點，沒有局部誤差（Inaccurate 點）的檢查；第一步取 Max load fraction per step。其餘規則與 PLAXIS 的 Plastic 計算相同，可以用來體會參數的作用，但數字不代表任何真實工程。</p>
+    </div>
+  </div>
+  <h3>可以試的幾件事</h3>
+  <ul>
+    <li><b>Over-relaxation 改成 1.0</b>：彈性區一次修正就平衡（Global error 直接掉到 0），但進入塑性後迭代次數增加。調到 1.8 則每次修正都衝過頭 80 %，連彈性區都要十幾次迭代，步長被迫縮小。</li>
+    <li><b>Max load fraction 改成 0.1</b>：步數變多、每步迭代變少，載重–位移曲線上的點更密，接近極限時步長自動縮小。</li>
+    <li><b>目標超過 1</b>（極限載重以上）：Arc-length 開時 ΣMstage 停在約 0.87（F₀ = 0.3 時極限對應的值）、CSP 掉到 0、位移一直增加直到步數用完；關閉時步長不斷減半，最後 Load advancement procedure fails。兩者都告訴你「這個載重加不上去」。</li>
+    <li><b>峰後軟化＋Arc-length</b>：越過峰值後 ΣMstage 開始倒退，連續 Max unloading steps 步下降且 CSP &lt; 0.015，判定崩塌。</li>
+    <li><b>切線勁度</b>：接近極限時迭代次數明顯減少（二次收斂），但完全塑性的平台上切線勁度為零、矩陣奇異，只能靠減半。這就是 PLAXIS 選用彈性勁度的原因。</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 1.10 -->
+<section class="sec" id="s10" data-num="1.10" data-short="分階施工與 ΣMstage">
+  <div class="sec-head"><span class="sec-num">1.10</span><h2>分階施工與 ΣMstage</h2></div>
+  <p>每個 phase 在 Staged construction 模式中定義新的狀態：啟用或停用土體與結構物、改變載重、更換材料、改變水壓。程式比較「本階段結束時應有的狀態」與「上一階段結束時的狀態」，把兩者的差異（不平衡力）分成多個 step 解掉。</p>
+  <figure class="diagram">
+  <svg viewBox="0 0 720 230" width="720" role="img" aria-label="開挖：停用元素後的不平衡力">
+    <rect x="20" y="30" width="300" height="170" class="softf ln2"/>
+    <path d="M120 200 L120 110 Q170 70 220 110 L220 200 Z" class="grayf ln2"/>
+    <text x="140" y="165">待挖岩體</text>
+    <text x="40" y="22" class="b">開挖前</text>
+    <text x="30" y="222" class="s">待挖岩體支撐著周圍岩體，整體平衡</text>
+    <rect x="400" y="30" width="300" height="170" class="softf ln2"/>
+    <path d="M500 200 L500 110 Q550 70 600 110 L600 200 Z" class="bgf ln2"/>
+    <text x="420" y="22" class="b">停用之後</text>
+    <g class="rd">
+      <line x1="500" y1="140" x2="522" y2="140"/><line x1="500" y1="175" x2="522" y2="175"/>
+      <line x1="600" y1="140" x2="578" y2="140"/><line x1="600" y1="175" x2="578" y2="175"/>
+      <line x1="540" y1="90" x2="545" y2="110"/><line x1="560" y1="90" x2="555" y2="110"/>
+    </g>
+    <text x="518" y="160" class="red" style="font-size:12px">不平衡力</text>
+    <text x="410" y="222" class="s">原本的支撐力消失，在開挖面上變成不平衡力</text>
+    <text x="340" y="120" style="font-size:22px">→</text>
+  </svg>
+  <figcaption>不平衡力在這個 phase 內分步施加：ΣMstage 從 0 增加到 1。ΣMstage = 0.4 時，開挖面上還保留 60 % 的原始支撐。</figcaption>
+  </figure>
+  <div class="grid2">
+    <div class="card"><h4>停用（開挖）的元素</h4><p>重量、勁度、強度都不再計入；應力設為零；新產生的邊界自動成為自由、透水邊界。水的條件會保留，模擬乾式開挖要另外修改該區的水條件。</p></div>
+    <div class="card"><h4>啟用（回填、新建）的元素</h4><p>勁度與強度從本階段第一步就完全計入；重量也從第一步計入，一開始會有很大的不平衡力，再分步解掉。應力從零開始，新節點先以無應力方式貼合已變形的網格。</p></div>
+  </div>
+  <h3>ΣMstage 的意義</h3>
+  <ul>
+    <li>每個 phase 開始時 ΣMstage = 0，成功結束時等於 1.000，表示不平衡力已經全部解掉。</li>
+    <li>可以刻意把目標設成小於 1。例如連續三個 phase 設 0.5、0.5、1.0：第一個結束解掉 50 %，第二個再解掉剩下的 50 %（累計 75 %），第三個累計 100 %。β 法（收斂–圍束法）就用這個做法模擬掌子面的三維拱效應。</li>
+    <li>ΣMstage &lt; 1 結束的 phase 仍留有不平衡力，後面一定要接另一個 Staged construction phase；到 1 之前不要做 Safety 等其他類型的計算。</li>
+    <li>沒完成的 phase 實際施加的載重：\(f_{applied} = f_{0} + \Sigma M_{stage}\,(f_{defined}-f_{0})\)。</li>
+  </ul>
+  <h3>ΣMstage 沒有到 1：先分辨是哪一種</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>錯誤碼</th><th>訊息</th><th>判斷</th><th>怎麼處理</th></tr>
+    <tr><td class="num">101</td><td>Soil body seems to collapse</td><td>載重連續 Max unloading steps 步下降，且 CSP &lt; 0.015</td><td>已達崩塌載重，提高 Max steps 重算沒有用；檢查支撐、參數、開挖順序</td></tr>
+    <tr><td class="num">102</td><td>Not enough load steps</td><td>用完 Max steps，ΣMstage 仍 &lt; 1</td><td>ΣMstage 仍穩定上升、CSP 不小 → 提高 Max steps 或接一個不改設定的 phase；ΣMstage 停滯、CSP ≈ 0 → 實際上是破壞</td></tr>
+    <tr><td class="num">103</td><td>Load advancement procedure fails</td><td>載重加不上去，但 CSP &gt; 0.015，不像真的破壞</td><td>微調數值控制參數，特別是試著關閉 Arc-length</td></tr>
+  </table></div>
+  <h3>實例：光明廠房 plan_e 遇過的情況</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>案例</th><th>錯誤</th><th>原因與處理</th></tr>
+    <tr><td>e1，預設迭代參數</td><td>L02 Error 101</td><td>預設參數（Arc-length 開、每步最多 0.5、unloading 5 步）在第二階就判定崩塌 → 改用放寬參數</td></tr>
+    <tr><td>e1，放寬參數</td><td>L16 Error 102</td><td>ΣMstage 卡在 0.551、CSP ≈ 0；166 個塑性點中 116 個是張力點。主廠房左拱肩少數元素全進張力截斷、勁度為零，位移發散到 8×10¹² m，3000 步用完。不是整體崩塌，是開挖面幾個元素失去勁度 → e4 加密洞周網格、修正拱腳近點</td></tr>
+  </table></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>Numerical control parameters</th><th>預設</th><th>plan_e 放寬參數</th><th>為什麼</th></tr>
+    <tr><td>Use default iter. parameters</td><td>True</td><td>False</td><td>要自訂下列各項</td></tr>
+    <tr><td>Max steps</td><td>1000</td><td>3000</td><td>步長變小後需要更多步</td></tr>
+    <tr><td>Max unloading steps</td><td>5</td><td>20</td><td>破壞機制轉換時容許載重暫時下降</td></tr>
+    <tr><td>Max load fraction per step</td><td>0.5</td><td>0.1</td><td>塑性區發展時步長不會一次跳太大</td></tr>
+    <tr><td>Arc-length control</td><td>On</td><td>Off</td><td>ΣMstage 不能倒退，避免被判定崩塌；代價是要自己檢查 |u| 過大的節點</td></tr>
+  </table></div>
+  <div class="callout pitfall"><div class="ct">關掉 Arc-length 之後</div><p>少數元素位移發散到數公尺甚至 10³ m 時，計算仍可能判定收斂。每個階段算完都要檢查 |u| 異常大的節點（第 4 章用 Python 一次掃過所有階段）。</p></div>
+  <h3>Deconfinement 與 ΣMstage &lt; 1</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th></th><th>ΣMstage &lt; 1</th><th>Deconfinement</th></tr>
+    <tr><td>設定位置</td><td>Phase 的 Loading 參數</td><td>在 Staged construction 中逐一設定每個土體，輸入釋放百分比</td></tr>
+    <tr><td>作用對象</td><td>整個 phase 的總應力變化，有效應力與孔隙水壓同等影響</td><td>只影響有效應力變化，不影響水壓</td></tr>
+    <tr><td>多洞室</td><td>所有變化共用一個比例</td><td>每個開挖段可以用不同的釋放比例</td></tr>
+  </table></div>
+</section>
+
+<!-- ============================================================ 1.11 -->
+<section class="sec" id="s11" data-num="1.11" data-short="初始應力">
+  <div class="sec-head"><span class="sec-num">1.11</span><h2>初始應力</h2></div>
+  <p>土層在施工前已經在自重下平衡。初始應力決定每個應力點的勁度與距離降伏面多遠，錯了後面每個階段都跟著錯。Initial phase 有三種計算類型：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>方法</th><th>做法</th><th>適用</th><th>注意</th></tr>
+    <tr><td>K0 procedure</td><td>\(\sigma'_v\) = 上覆重量；\(\sigma'_h = K_0\,\sigma'_v\)。不檢查平衡</td><td>地表、土層與水位都水平</td><td>不產生剪應力，地表傾斜時會有不平衡力；K0 使應力超出降伏面時，程式自動降低水平應力並產生塑性點</td></tr>
+    <tr><td>Gravity loading</td><td>以 Plastic 計算施加自重（ΣMweight 0 → 1）</td><td>地表傾斜、地層不水平</td><td>彈性側向拘束下 \(K_0=\nu/(1-\nu)\)：ν = 0.3 只得到 0.43，很難得到 K0 &gt; 1；要目標 K0 可先取 \(\nu = K_0/(1+K_0)\)</td></tr>
+    <tr><td>Field stress</td><td>直接指定三個主應力與主方向，全模型均勻應力</td><td>深層岩體、主應力有旋轉</td><td>不考慮應力隨深度增加；四邊界都要全固定；之後要接 nil-phase</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Plastic nil-phase</b>：一個不加任何載重的 Plastic phase，用來解掉 K0 procedure 留下的少量不平衡或塑性點。</li>
+    <li><b>Reset displacements to zero</b>：初始應力產生的位移沒有物理意義，下一個 phase 要勾選，讓位移從零開始累計，應力不受影響。K0 procedure 直接給定應力、沒有位移，所以接在它後面的第一階不必勾。</li>
+    <li>無凝聚性材料要避免初始應力就降伏，K0 必須介於 \(\dfrac{1-\sin\varphi}{1+\sin\varphi}\) 與 \(\dfrac{1+\sin\varphi}{1-\sin\varphi}\) 之間。</li>
+  </ul>
+  <div class="callout example"><div class="ct">光明廠房的設定</div><p>地表水平，Initial phase 用 K0 procedure，材料 Initial 頁改成 Manual：面內 \(K_{0,x}\) = 0.485、出平面 \(K_{0,z} = \nu(1+K_{0,x})\) = 0.3564（與 OpenSees 平面應變的 \(\sigma_z=\nu(\sigma_x+\sigma_y)\) 相同）。算完先檢查 Ph0：\(\sigma_v = \gamma\,z\)、\(\sigma_h = K_0\,\sigma_v\)，且沒有塑性點。</p></div>
+</section>
+
+<!-- ============================================================ 1.12 -->
+<section class="sec" id="s12" data-num="1.12" data-short="Safety 強度折減">
+  <div class="sec-head"><span class="sec-num">1.12</span><h2>Safety：強度折減</h2></div>
+  <p>Safety 計算回答「目前這個狀態下，強度還能打幾折才會破壞」。載重、幾何與勁度都不變，只用同一個係數 ΣMsf 逐步折減強度：</p>
+  <div class="eqbox">\[ \Sigma M_{sf} = \frac{\tan\varphi_{input}}{\tan\varphi_{reduced}} = \frac{c_{input}}{c_{reduced}} \]</div>
+  <div class="pair pair2">
+    <div class="pv">
+    <figure class="diagram" style="margin:0">
+    <svg viewBox="0 0 340 230" width="340" role="img" aria-label="ΣMsf 對位移的曲線">
+      <line x1="40" y1="200" x2="325" y2="200" class="ln"/><line x1="40" y1="200" x2="40" y2="15" class="ln"/>
+      <text x="300" y="220" class="s">|u|</text><text x="4" y="24" class="s">ΣMsf</text>
+      <text x="14" y="186" class="s">1.0</text>
+      <path d="M40 182 C 70 120, 110 75, 170 62 S 280 58, 320 58" class="ac"/>
+      <line x1="40" y1="58" x2="325" y2="58" class="thin"/>
+      <text x="180" y="48" class="acc">平台值 = FS</text>
+    </svg>
+    <figcaption>位移持續增加而 ΣMsf 維持定值，代表破壞機制已完全形成，平台值就是安全係數。</figcaption>
+    </figure>
+    </div>
+    <div class="pt">
+      <ul>
+        <li>tanφ、c 與抗拉強度同時折減；ψ 原則上不折減，但 φ 降到等於 ψ 後跟著一起降。</li>
+        <li>Safety 會<b>跑滿 Max steps</b>（預設 100），最後一定要用 Curves 確認 ΣMsf 出現平台，沒有平台就加大步數重算。</li>
+        <li>要開 Arc-length、容許誤差不超過 0.01。<b>沒有 Arc-length 時 ΣMsf 不能下降，可能高估安全係數。</b></li>
+        <li>Safety phase 的位移沒有物理意義，建議勾選 Reset displacements to zero，也不要拿它接後續施工階段。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout intuition"><div class="ct">兩種安全係數</div><p>強度折減找到的是「強度下降時最先破壞的機制」，不一定等於「載重增加時最先破壞的機制」，兩者的安全係數可能不同，報告要寫明用的是哪一種。進階模型在 Safety 中會退化成 MC 行為；Hoek-Brown 材料有自己的折減公式。</p></div>
+</section>
+
+<!-- ============================================================ 1.13 -->
+<section class="sec" id="s13" data-num="1.13" data-short="讀懂 Active tasks">
+  <div class="sec-head"><span class="sec-num">1.13</span><h2>讀懂 Active tasks 視窗</h2></div>
+  <p>計算時跳出的 Active tasks 視窗分成幾區。以下逐欄說明，最後用一個實際停滯的 phase 當例子。</p>
+  <h3>Total multipliers at the end of previous loading step</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>欄位</th><th>意義</th></tr>
+    <tr><td>ΣMdispX、ΣMdispY</td><td>指定位移在本階段已施加的比例</td></tr>
+    <tr><td>ΣMweight</td><td>材料重量已施加的比例；1.000 表示自重已全部施加</td></tr>
+    <tr><td>ΣMaccel</td><td>擬靜態加速度乘數，一般為 0</td></tr>
+    <tr><td>ΣMsf</td><td>強度折減係數，只在 Safety 中變化，其他計算為 1.000</td></tr>
+    <tr class="hl"><td><b>ΣMstage</b></td><td><b>Plastic 計算的完成比例</b>：開始為 0，成功時為 1.000；Consolidation 與 Safety 時固定為 0</td></tr>
+    <tr><td>Pexcess,max</td><td>最大超額孔隙水壓；排水分析為 0</td></tr>
+    <tr><td>ΣMarea</td><td>目前啟用的土體面積占全部土體面積的比例；開挖後小於 1</td></tr>
+    <tr><td>Fx、Fy</td><td>非零指定位移處的反力</td></tr>
+    <tr class="hl"><td><b>Stiffness</b></td><td><b>即 CSP</b>：全彈性為 1，接近破壞時趨近 0</td></tr>
+    <tr><td>Time、Dyn. time</td><td>壓密或動力分析的時間</td></tr>
+  </table></div>
+  <h3>Calculation progress</h3>
+  <p>第一個曲線點（curve point）的簡易曲線。Plastic 計算畫 ΣMstage 對位移，Safety 畫 ΣMsf 對位移。計算前在 Output 選好曲線點（第 2 章），這張圖才有意義。</p>
+  <h3>Iteration process of current step</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>欄位</th><th>意義</th></tr>
+    <tr><td>Current step／Max. step</td><td>目前的步數／Max steps 上限</td></tr>
+    <tr><td>Iteration／Max. iterations</td><td>這一步目前的迭代次數／單步迭代上限</td></tr>
+    <tr><td>Global error／Tolerance</td><td>整體平衡誤差／容許值。Global error 大於 Tolerance 時一定會繼續迭代</td></tr>
+    <tr><td>Element</td><td>本階段啟用的土體元素數</td></tr>
+    <tr><td>Decomposition</td><td>勁度矩陣分解的進度</td></tr>
+  </table></div>
+  <h3>Plastic points in current step</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>欄位</th><th>意義</th></tr>
+    <tr><td>Plastic stress points</td><td>土體元素中處於塑性狀態的應力點數</td></tr>
+    <tr><td>Plastic interface points</td><td>介面元素中的塑性點數</td></tr>
+    <tr><td>Inaccurate／Tolerated</td><td>局部誤差超過容許值的塑性點數／容許上限（0.1 × 塑性點數 + 3）</td></tr>
+    <tr><td>Tension points</td><td>觸發 tension cut-off 的點（受拉破壞）</td></tr>
+    <tr><td>Cap/Hard points</td><td>HS、Soft Soil 等硬化模型的帽蓋點與硬化點；MC 不會出現</td></tr>
+    <tr><td>Apex points</td><td>容許剪應力為零的特殊塑性點；數量多時迭代變慢</td></tr>
+  </table></div>
+  <p>按 <b>Preview</b> 可以在計算中途查看中間步的結果，找出變形集中的位置。</p>
+  <h3>範例：一個停滯的 phase</h3>
+  <div class="callout example"><div class="ct">畫面數值</div><p>L14 開挖階段，ΣMstage = 0.5434、Stiffness ≈ 0（−0.07×10⁻¹⁵）、Current step 539／3000、Iteration 9／60、Global error 0.01317／0.01、Plastic stress points 7259、Inaccurate 98／Tolerated 729、Tension points 1555；Calculation progress 曲線的 ΣMstage 停在約 0.55，橫軸位移卻已到 4×10¹¹。</p></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>觀察</th><th>解讀</th></tr>
+    <tr><td>ΣMstage 停在 0.54 好幾百步</td><td>這個階段的不平衡力只解掉約 54 %，剩下的加不上去</td></tr>
+    <tr><td>Stiffness ≈ 0</td><td>整體勁度已經耗盡，接近或已經破壞（1.9 互動視窗「目標超過 1」的情境就是這個樣子）</td></tr>
+    <tr><td>位移達 4×10¹¹</td><td>不是真實位移，是數值上形成了機構</td></tr>
+    <tr><td>Inaccurate 98 &lt; Tolerated 729</td><td>局部誤差沒有問題，卡住的是整體平衡</td></tr>
+    <tr><td>Tension points 1555</td><td>大範圍受拉破壞，要看分布位置</td></tr>
+  </table></div>
+  <p><b>下一步</b>：按 Preview 找變形集中處；確認前一階段 ΣMstage 已到 1；確認本階段該啟用的支撐都已啟用；必要時對前一個成功的階段做 Safety，看它距離極限多遠。</p>
+  <h3>其他結束訊息</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>訊息</th><th>意義與處理</th></tr>
+    <tr><td>Numerical error</td><td>多半是輸入錯誤，檢查輸入資料、網格與 phase 設定</td></tr>
+    <tr><td>Severe divergence</td><td>整體誤差持續增加到極大值；壓密時時間步太小也會發生，或已接近破壞</td></tr>
+    <tr><td>Maximum iterations reached in final step</td><td>最後一步迭代到上限仍未收斂，結果可能不準，常代表輸入有誤</td></tr>
+    <tr><td>矩陣接近奇異（nearly singular）</td><td>常是邊界條件不足，有元素「漂浮」</td></tr>
+  </table></div>
+</section>
+
+<!-- ============================================================ 1.14 -->
+<section class="sec" id="s14" data-num="1.14" data-short="建立有意義的模型">
+  <div class="sec-head"><span class="sec-num">1.14</span><h2>建立有意義的模型</h2></div>
+  <p>同一個開挖問題，計算域太小、網格太粗、恰當的三個模型都跑得完、都收斂、都沒有錯誤訊息，但只有第三個站得住腳。得到結果之前有十五個決策，每一個都有站得住腳與站不住腳的答案，計算本身分不出來。</p>
+  <figure class="shot"><img src="assets/img/ch1/fifteen_decisions.png" alt="得到結果前的十五個決策" loading="lazy"><figcaption>幾何 4 項、離散化 4 項、材料 3 項、求解 4 項。數值模型的常見失敗，都是答錯其中一題，而不是程式的 bug。</figcaption></figure>
+  <h3>計算域與邊界</h3>
+  <ul>
+    <li>邊界太近會加入地盤沒有的勁度，靜力分析中沉陷、變位與破壞載重的誤差是單向的：<b>域太小看起來比較安全</b>。結構內力與孔隙水壓的方向沒有保證。</li>
+    <li>先選定要報告的關注量（最大壁體變位、拱頂沉陷、破壞載重），把範圍加倍後答案只變 1 %，才算夠大。光明廠房 plan4a 以「左右底邊界 1 % 無應力殘餘」決定範圍，就是這個做法。</li>
+    <li>底部邊界直接束制垂直位移，深度通常比寬度敏感。</li>
+  </ul>
+  <h3>網格</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>量</th><th>網格加密時的走向</th><th>可否直接報告</th></tr>
+    <tr><td>載重方向的位移</td><td>由下往上單調逼近</td><td>可以</td></tr>
+    <tr><td>一般位置的應力</td><td>可能在答案附近振盪</td><td>小心，回到積分點值再看</td></tr>
+    <tr><td>奇異點（凹角）的峰值應力</td><td>持續上升，永不收斂</td><td>不可，改報合力、彎矩</td></tr>
+    <tr><td>破壞載重</td><td>由上往下遞減</td><td>可以，三組網格外插</td></tr>
+    <tr><td>軟化材料的峰值載重</td><td>隨網格無限下降</td><td>不可，要先正則化</td></tr>
+  </table></div>
+  <p>三組網格（元素尺寸比 \(r\approx 2\)）得到關注量 \(\varphi_3\)（粗）、\(\varphi_2\)、\(\varphi_1\)（細），可以估計收斂階數與外插值：</p>
+  <div class="eqbox">\[ p=\frac{\ln\left[(\varphi_3-\varphi_2)/(\varphi_2-\varphi_1)\right]}{\ln r},\qquad \varphi_{ext}=\varphi_1+\frac{\varphi_1-\varphi_2}{r^{p}-1} \]</div>
+  <p class="mini">例：破壞載重粗 6.10、中 5.55、細 5.35 \(s_u\)，\(p\) ≈ 1.46，外插 5.24 \(s_u\)，細網格剩餘誤差約 2 %；Prandtl 解 5.14 \(s_u\) 更低，符合「由上往下逼近」。光明廠房 e4（洞周 0.5 m）與 e7（加密區內 2.5 m）就是這種網格比較。</p>
+  <h3>三維簡化為二維</h3>
+  <ul>
+    <li>平面應變限制出平面應變，所以 \(\sigma_z\) 不為零；平面應力在大地工程幾乎用不到；軸對稱不能受側向力。</li>
+    <li>支撐、地錨、岩栓、樁在平面應變中代表「每延公尺」，勁度、預力、抗拉拔都要除以出平面間距 \(L_s\)，忘記除就高估 \(L_s\) 倍。</li>
+    <li>報告要寫出採用二維的理由、預期偏差的大小與方向。</li>
+  </ul>
+  <h3>排水條件與求解器</h3>
+  <ul>
+    <li>排水與否看載重時間與排水時間的比值 \(T = c_v t/H_{dr}^2\)，不是看土壤種類。有效應力不排水分析中 \(s_u\) 是輸出，不是輸入。</li>
+    <li>求解器的四個無聲錯誤：容許誤差太鬆、載重控制停在極限點前、時間步太大、阻尼重複計算。它們都會算完、都會收斂，但答案錯。</li>
+  </ul>
+  <h3>六種常見失敗與檢查</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>失敗模式</th><th>檢查方法</th></tr>
+    <tr><td>組成律選錯（開挖用線彈性、反覆載重用 MC）</td><td>列出問題中的應力路徑，確認組成律能描述（第 5、6 章）</td></tr>
+    <tr><td>參數未率定</td><td>用元素試驗模擬重現實測曲線</td></tr>
+    <tr><td>排水假設錯</td><td>先算時間因數 \(T\)</td></tr>
+    <tr><td>邊界條件錯、計算域太小</td><td>加大計算域，結果改變 &lt; 數 % 才算夠大</td></tr>
+    <tr><td>未檢查網格、步長</td><td>三組網格、兩組容許誤差比較</td></tr>
+    <tr><td>相信彩色圖</td><td>與封閉解、經驗值做量級檢查；回到積分點數值</td></tr>
+  </table></div>
+  <div class="callout link"><div class="ct">接下來</div><p>第 2 章把這些決策落實到 PLAXIS：分析域、材料、幾何、網格、相位與計算參數，每一步都對照 GUI 與 Command 指令。</p></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="index.html"><span class="dir">← 上一頁</span>首頁</a><a class="next" href="ch2_preprocessing.html"><span class="dir">下一頁 →</span>2 · Input: Pre-Processing</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 個人學習筆記</footer>
+
+<script src="assets/common.js"></script>
+<script>
+/* ===== 計算核心：一維「多應力點」模型 =====
+   N 根並聯彈簧＝N 個應力點（彈性–完全塑性，可選軟化到殘餘值），用來重現 PLAXIS 一個 Plastic phase 的
+   載重步（Step）、迭代（Iteration）、應力點回傳與步長控制。無因次：總彈性勁度 Ke = 1，不軟化時極限載重 Pu = 1。 */
+const PX = (function () {
+  const N = 12;
+  function makeModel(soft) {
+    const k = 1 / N, sp = [];
+    for (let i = 0; i < N; i++) {
+      const uy = 0.4 + 1.2 * i / (N - 1);          // 各應力點的降伏位移 0.4–1.6
+      sp.push({ k, fy: k * uy, H: soft ? -0.15 * k : 0, fr: soft ? 0.5 * k * uy : k * uy });
+    }
+    return sp;
+  }
+  const fresh = sp => sp.map(() => ({ f: 0, kap: 0 }));
+  // 應力點回傳：彈性試算 → 超出降伏面就拉回
+  function point(s, st, du) {
+    const tr = st.f + s.k * du;
+    const fyNow = Math.max(s.fr, s.fy + s.H * st.kap);
+    if (Math.abs(tr) <= fyNow) return { f: tr, kap: st.kap, kt: s.k, pl: false };
+    const sg = Math.sign(tr);
+    if (s.H < 0 && fyNow > s.fr) {
+      const dk = (Math.abs(tr) - fyNow) / (s.k + s.H);
+      const fyNew = s.fy + s.H * (st.kap + dk);
+      if (fyNew >= s.fr) return { f: sg * fyNew, kap: st.kap + dk, kt: s.k * s.H / (s.k + s.H), pl: true };
+      return { f: sg * s.fr, kap: st.kap + (Math.abs(tr) - s.fr) / s.k, kt: 0, pl: true };
+    }
+    return { f: sg * fyNow, kap: st.kap + (Math.abs(tr) - fyNow) / s.k, kt: 0, pl: true };
+  }
+  function internal(sp, st, du) {
+    let F = 0, Kt = 0, npl = 0; const ns = new Array(sp.length);
+    for (let i = 0; i < sp.length; i++) {
+      const r = point(sp[i], st[i], du);
+      F += r.f; Kt += r.kt; if (r.pl) npl++;
+      ns[i] = { f: r.f, kap: r.kap };
+    }
+    return { F, Kt, npl, ns };
+  }
+  const sumF = st => st.reduce((a, x) => a + x.f, 0);
+  function curve(sp, umax) {
+    let st = fresh(sp); const pts = [[0, 0]]; const n = 500, du = umax / n;
+    for (let j = 1; j <= n; j++) { const r = internal(sp, st, du); st = r.ns; pts.push([j * du, r.F]); }
+    return pts;
+  }
+
+  /* P: F0, F1（本 phase 起訖載重）、maxFrac、tol、desMin、desMax、maxIt、maxSteps、maxUnload、omega、
+        arc（true／false）、newton（'initial'／'tangent'）、soft */
+  function simulate(P) {
+    const sp = makeModel(P.soft), Ke = 1;
+    const F0 = P.F0, dF = P.F1 - P.F0, duF = dF / Ke;
+    // 前面各 phase 已把 F0 加上（以位移二分法找平衡狀態）
+    let lo = 0, hi = 20;
+    for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2; if (internal(sp, fresh(sp), m).F < F0) lo = m; else hi = m; }
+    let u = (lo + hi) / 2, st = internal(sp, fresh(sp), u).ns;
+    if (Math.abs(sumF(st) - F0) > 1e-6) return { fatal: '前階段載重 F0 已超過材料的承載上限，無法建立初始狀態。' };
+    const uStart = u;
+    let forceFinal = false, forceDu = 0;
+    let lam = 0, dlam = P.maxFrac, dl = null, dir = 1, unload = 0, pend = 0, totalIt = 0, halv = 0, status = null, lastFail = null;
+    const steps = [], MIN = 1e-7;
+    while (!status) {
+      if (steps.length >= P.maxSteps) { status = { code: 102, msg: 'Not enough load steps：Max steps 用完，ΣMstage 仍未到 1' }; break; }
+      const arcStep = P.arc && dl !== null && !forceFinal;
+      let Dlam, Du, arcOn, dlUse = dl;
+      if (forceFinal) { Dlam = 1 - lam; Du = forceDu; arcOn = false; }
+      else if (!arcStep) { Dlam = Math.min(dlam, 1 - lam); Du = 0; arcOn = false; }
+      else {
+        Dlam = dir * dl / (Math.SQRT2 * Math.abs(duF));
+        if (lam + Dlam > 1) {                     // 會超過 1：弧長縮成「依目前割線勁度約可走到 1」的長度
+          Dlam = 1 - lam;
+          const c = Math.min(1, Math.max(0.05, steps.length ? steps[steps.length - 1].csp : 1));
+          dlUse = Math.min(dl, Math.hypot(Dlam * duF / c, Dlam * duF));
+        }
+        Du = Dlam * duF; arcOn = true;
+      }
+      const F_begin = sumF(st);
+      let res = internal(sp, st, Du), it = 0, conv = false, singular = false;
+      const errHist = [];
+      let csp = 1;
+      for (it = 1; it <= P.maxIt; it++) {
+        const r = F0 + (lam + Dlam) * dF - res.F;
+        csp = Math.abs(Du) > 1e-14 ? (res.F - F_begin) / (Ke * Du) : 1;
+        const err = Math.abs(r) / (Math.abs(dF) + Math.max(csp, 0) * Math.abs(F0));
+        errHist.push(err);
+        if (err <= P.tol && it > 1) { conv = true; break; }
+        if (it >= P.desMax) break;                         // 超過 Desired max 仍未收斂 → 這一步減半重來
+        let K = Ke;
+        if (P.newton === 'tangent') { K = res.Kt; if (Math.abs(K) < 1e-9) { singular = true; break; } }
+        const dur = P.omega * r / K;
+        if (!arcOn) Du += dur;
+        else {
+          const dUF = duF * Ke / K, X = Du + dur;
+          const A = dUF * dUF + duF * duF, B = 2 * X * dUF + 2 * Dlam * duF * duF;
+          const C = X * X + Dlam * Dlam * duF * duF - dlUse * dlUse, disc = B * B - 4 * A * C;
+          if (disc < 0) { singular = true; break; }
+          const r1 = (-B + Math.sqrt(disc)) / (2 * A), r2 = (-B - Math.sqrt(disc)) / (2 * A);
+          const dot = d => (X + d * dUF) * Du + (Dlam + d) * Dlam * duF * duF;
+          const d = dot(r1) >= dot(r2) ? r1 : r2;
+          Du = X + d * dUF; Dlam += d;
+        }
+        res = internal(sp, st, Du);
+      }
+      totalIt += Math.min(it, P.maxIt);
+      if (conv && arcOn && lam + Dlam > 1 + 1e-12) {   // 弧長步越過 ΣMstage = 1：改以載重控制剛好走到 1
+        forceFinal = true; forceDu = Du * (1 - lam) / Dlam; continue;
+      }
+      if (!conv) {
+        if (forceFinal) { forceFinal = false; }
+        halv++; pend++;
+        lastFail = { errHist, singular, at: lam + Dlam, n: steps.length + 1 };
+        if (dl !== null && P.arc) dl = dlUse / 2; else dlam = Math.min(dlam, Dlam) / 2;
+        const tiny = !(dl !== null && P.arc) ? dlam < MIN : dl < MIN * Math.abs(duF);
+        if (tiny) {
+          const c = steps.length ? steps[steps.length - 1].csp : 1;
+          status = { code: 103, msg: `Load advancement procedure fails：步長縮到極小仍無法收斂（最後收斂步 CSP ${c.toFixed(3)}）` };
+        }
+        continue;
+      }
+      forceFinal = false;
+      st = res.ns; u += Du; lam += Dlam;
+      steps.push({ n: steps.length + 1, lam, u: u - uStart, uabs: u, F: res.F, csp, iters: it, halv: pend, errHist, Dlam, arc: arcStep, npl: res.npl, singularBefore: lastFail && lastFail.singular && pend > 0 });
+      pend = 0;
+      unload = Dlam < 0 ? unload + 1 : 0;
+      if (P.arc && unload >= P.maxUnload && csp < 0.015) { status = { code: 101, msg: `Soil body seems to collapse：載重連續 ${unload} 步下降，且 CSP < 0.015` }; break; }
+      if (lam >= 1 - 1e-12) { status = { code: 0, msg: '計算成功：ΣMstage 走到 1.000' }; break; }
+      const grow = it < P.desMin ? 2 : 1;
+      if (arcStep) {
+        dir = Math.sign(Du * duF + Dlam * duF * duF) || 1;
+        dl = Math.min(Math.sqrt(Du * Du + Dlam * Dlam * duF * duF) * grow, P.maxFrac * Math.SQRT2 * Math.abs(duF));
+      } else {
+        dlam = Math.min(Dlam * grow, P.maxFrac);
+        if (P.arc && csp < 0.5) { dl = Math.SQRT2 * Math.abs(Dlam * duF); dir = 1; }   // CSP < 0.5 才啟用弧長
+      }
+    }
+    const umax = Math.max(2.6, (steps.length ? steps[steps.length - 1].uabs : 2) * 1.1);
+    return { steps, status, totalIt, halv, lastFail, uStart, curve: curve(sp, umax), sp };
+  }
+  return { simulate, makeModel, internal, fresh, curve };
+})();
+
+</script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const lab = $('lab');
+  if (!lab) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 470, H = 300, M = { l: 54, r: 14, t: 14, b: 42 };
+  const fmt = (v, d = 3) => (Math.abs(v) < 1e-12 ? 0 : v).toFixed(d);
+
+  /* ---------- 小型繪圖工具 ---------- */
+  function nice(lo, hi, n) {
+    const span = hi - lo || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const st = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => span / x <= n) || 10 * mag;
+    const t = []; for (let v = Math.ceil(lo / st - 1e-9) * st; v <= hi + 1e-9 * st; v += st) t.push(+v.toFixed(10));
+    return t;
+  }
+  function axes(svg, o) {
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const sx = v => M.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * pw;
+    const sy = o.ylog ? v => M.t + ph - (Math.log10(Math.max(v, 1e-30)) - Math.log10(o.y[0])) / (Math.log10(o.y[1]) - Math.log10(o.y[0])) * ph
+      : v => M.t + ph - (v - o.y[0]) / (o.y[1] - o.y[0]) * ph;
+    let s = `<defs><clipPath id="${svg.id}c"><rect x="${M.l}" y="${M.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    const xt = o.xt || nice(o.x[0], o.x[1], 5);
+    const yt = o.ylog ? (() => { const a = []; for (let e = Math.ceil(Math.log10(o.y[0])); e <= Math.log10(o.y[1]) + 1e-9; e++) a.push(Math.pow(10, e)); return a; })() : nice(o.y[0], o.y[1], 5);
+    xt.forEach(v => { const X = sx(v); s += `<line class="tick" x1="${X}" y1="${M.t + ph}" x2="${X}" y2="${M.t + ph - 5}"/><line class="tick" x1="${X}" y1="${M.t}" x2="${X}" y2="${M.t + 5}"/><text class="tick-label" x="${X}" y="${M.t + ph + 17}" text-anchor="middle">${o.xf ? o.xf(v) : +v.toFixed(6)}</text>`; });
+    yt.forEach(v => { const Y = sy(v); s += `<line class="tick" x1="${M.l}" y1="${Y}" x2="${M.l + 5}" y2="${Y}"/><line class="tick" x1="${M.l + pw}" y1="${Y}" x2="${M.l + pw - 5}" y2="${Y}"/><text class="tick-label" x="${M.l - 7}" y="${Y + 4}" text-anchor="end">${o.ylog ? '10<tspan dy="-6" font-size="9">' + Math.round(Math.log10(v)) + '</tspan>' : +v.toFixed(6)}</text>`; });
+    s += `<rect class="axis-frame" x="${M.l}" y="${M.t}" width="${pw}" height="${ph}"/>`;
+    s += `<text class="axis-label" x="${M.l + pw / 2}" y="${H - 6}" text-anchor="middle">${o.xl}</text>`;
+    s += `<text class="axis-label" transform="translate(14 ${M.t + ph / 2}) rotate(-90)" text-anchor="middle">${o.yl}</text>`;
+    return { sx, sy, s, clip: `clip-path="url(#${svg.id}c)"`, pw, ph };
+  }
+  const intTicks = n => { const st = n <= 10 ? 1 : nice(0, n, 5)[1] - nice(0, n, 5)[0]; const t = []; for (let v = 0; v <= n + 1e-9; v += Math.max(1, Math.round(st))) t.push(v); return t; };
+  const path = (pts, sx, sy) => pts.map((p, i) => (i ? 'L' : 'M') + sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1)).join('');
+
+  /* ---------- 控制項 ---------- */
+  const P = { arc: true, newton: 'initial', soft: false };
+  const num = ['F0', 'F1', 'maxFrac', 'tol', 'desMin', 'desMax', 'omega', 'maxSteps', 'maxUnload'];
+  function syncOut() {
+    lab.querySelectorAll('input[type=range]').forEach(r => {
+      const o = lab.querySelector(`output[for="${r.id}"]`);
+      if (o) o.textContent = r.step && r.step.includes('.') ? (+r.value).toFixed(r.step.split('.')[1].length) : r.value;
+      r.style.setProperty('--pct', ((r.value - r.min) / (r.max - r.min) * 100) + '%');
+    });
+  }
+  function setSeg(k, v) {
+    lab.querySelectorAll(`.seg[data-k="${k}"] button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+  }
+  lab.querySelectorAll('.seg').forEach(g => g.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = g.dataset.k; const v = b.dataset.v;
+    P[k] = k === 'newton' ? v : v === '1'; setSeg(k, v); run();
+  }));
+  num.forEach(id => $(id).addEventListener('input', () => { syncOut(); run(); }));
+
+  const PRESETS = [
+    { t: '預設參數：0.3 → 0.8', v: {} },
+    { t: '每步上限 0.1、接近極限', v: { F1: 0.99, maxFrac: 0.1 } },
+    { t: '超過極限＋Arc-length', v: { F1: 1.1, maxSteps: 100 } },
+    { t: '超過極限、關閉 Arc-length', v: { F1: 1.1, arc: false } },
+    { t: '峰後軟化＋Arc-length', v: { F1: 1.0, soft: true } },
+    { t: '切線 Newton 接近極限', v: { F1: 0.99, maxFrac: 0.1, newton: 'tangent' } },
+    { t: '容許誤差放寬到 0.1', v: { F1: 0.97, tol: 0.1 } }
+  ];
+  const DEF = { F0: 0.3, F1: 0.8, maxFrac: 0.5, tol: 0.01, desMin: 6, desMax: 15, omega: 1.2, maxSteps: 1000, maxUnload: 5, arc: true, newton: 'initial', soft: false };
+  const pr = $('presets');
+  PRESETS.forEach((p, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = p.t;
+    b.addEventListener('click', () => { apply({ ...DEF, ...p.v }); pr.querySelectorAll('.btn').forEach(x => x.classList.toggle('on', x === b)); });
+    pr.appendChild(b);
+  });
+  function apply(v) {
+    num.forEach(id => { const el = $(id); if (el.tagName === 'SELECT') { [...el.options].forEach(o => o.selected = +o.value === +v[id]); } else el.value = v[id]; });
+    P.arc = v.arc; P.newton = v.newton; P.soft = v.soft;
+    setSeg('arc', v.arc ? '1' : '0'); setSeg('newton', v.newton); setSeg('soft', v.soft ? '1' : '0');
+    syncOut(); run();
+  }
+
+  /* ---------- 執行與繪圖 ---------- */
+  let R = null, Q = null;
+  function run() {
+    Q = { maxIt: 60 };
+    num.forEach(id => Q[id] = +$(id).value);
+    if (Q.desMax <= Q.desMin) { Q.desMax = Q.desMin + 1; }
+    Object.assign(Q, P);
+    R = PX.simulate(Q);
+    const st = $('status');
+    if (R.fatal) { st.className = 'status bad'; st.textContent = R.fatal; return; }
+    st.className = 'status ' + (R.status.code === 0 ? 'ok' : 'bad');
+    st.textContent = (R.status.code ? `Error ${R.status.code}　` : '') + R.status.msg;
+    const S = R.steps, L = S[S.length - 1] || { lam: 0, csp: 1, F: Q.F0 };
+    const target = Q.F0 + L.lam * (Q.F1 - Q.F0);
+    const stats = [
+      ['最後 ΣMstage', fmt(L.lam), R.status.code ? 'warn' : 'hl'],
+      ['收斂的步數', S.length, ''],
+      ['總迭代次數', R.totalIt, ''],
+      ['步長減半次數', R.halv, R.halv ? 'warn' : ''],
+      ['最後一步 CSP', fmt(L.csp), L.csp < 0.015 ? 'warn' : ''],
+      ['殘留不平衡力 ／ ΔF', ((target - L.F) / Math.abs(Q.F1 - Q.F0) * 100).toFixed(2) + ' %', '']
+    ];
+    $('stats').innerHTML = stats.map(([k, v, c]) => `<div class="stat ${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    const sel = $('stepSel');
+    const nSel = S.length + (R.status.code === 103 && R.lastFail ? 1 : 0);
+    sel.max = Math.max(1, nSel); sel.value = Math.max(1, Math.min(nSel, S.length || 1));
+    if (R.status.code === 103 && R.lastFail) sel.value = nSel;
+    drawA(); drawB(); drawC(); pick();
+  }
+  function drawA() {
+    const svg = $('pA'), S = R.steps;
+    const umax = Math.max(2.4, ...S.map(s => s.uabs)) * 1.05;
+    const fmax = Math.max(1.05, Q.F1 + 0.05);
+    const ax = axes(svg, { x: [0, umax], y: [0, Math.ceil(fmax * 10) / 10], xl: '位移 u（彈性勁度 = 1）', yl: '載重 F ／ Pᵤ' });
+    let s = ax.s;
+    s += `<g ${ax.clip}><path d="${path(R.curve, ax.sx, ax.sy)}" class="s-gray" fill="none" stroke-width="2.4" opacity=".55"/>`;
+    [[Q.F0, 'F₀'], [Q.F1, 'F₁ 目標']].forEach(([f, t]) => { s += `<line class="guide" x1="${M.l}" x2="${M.l + ax.pw}" y1="${ax.sy(f)}" y2="${ax.sy(f)}"/><text class="txt-muted" x="${M.l + ax.pw - 4}" y="${ax.sy(f) - 5}" text-anchor="end">${t}</text>`; });
+    const pts = [[R.uStart, Q.F0]].concat(S.map(x => [x.uabs, x.F]));
+    s += `<path d="${path(pts, ax.sx, ax.sy)}" class="s-blue" fill="none" stroke-width="1.4"/>`;
+    const every = Math.max(1, Math.ceil(S.length / 120));
+    S.forEach((x, i) => { if (i % every === 0 || i === S.length - 1) s += `<circle cx="${ax.sx(x.uabs).toFixed(1)}" cy="${ax.sy(x.F).toFixed(1)}" r="3" class="f-blue"/>`; });
+    s += `<circle cx="${ax.sx(R.uStart)}" cy="${ax.sy(Q.F0)}" r="3.6" class="f-ink"/>`;
+    s += '</g>';
+    svg.innerHTML = s;
+  }
+  function drawB() {
+    const svg = $('pB'), S = R.steps, n = Math.max(2, S.length);
+    const ymin = Math.min(0, ...S.map(s => s.csp));
+    const ax = axes(svg, { x: [0, n], xt: intTicks(n), y: [Math.floor(ymin * 10) / 10, 1.1], xl: '步數 step', yl: 'ΣMstage、CSP' });
+    let s = ax.s + `<g ${ax.clip}>`;
+    s += `<line class="guide" x1="${M.l}" x2="${M.l + ax.pw}" y1="${ax.sy(1)}" y2="${ax.sy(1)}"/>`;
+    s += `<path d="${path([[0, 0]].concat(S.map(x => [x.n, x.lam])), ax.sx, ax.sy)}" class="s-blue" fill="none" stroke-width="2"/>`;
+    s += `<path d="${path([[0, 1]].concat(S.map(x => [x.n, x.csp])), ax.sx, ax.sy)}" class="s-ink" fill="none" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    if (S.length <= 60) S.forEach(x => { s += `<circle cx="${ax.sx(x.n)}" cy="${ax.sy(x.lam)}" r="3" class="f-blue"/>`; });
+    s += '</g>';
+    svg.innerHTML = s;
+  }
+  function drawC() {
+    const svg = $('pC'), S = R.steps, n = Math.max(2, S.length);
+    const ymax = Math.max(Q.desMax + 2, ...S.map(x => x.iters)) + 1;
+    const ax = axes(svg, { x: [0, n + 1], xt: intTicks(n + 1), y: [0, ymax], xl: '步數 step', yl: '迭代次數' });
+    let s = ax.s + `<g ${ax.clip}>`;
+    const bw = Math.max(1, Math.min(18, ax.pw / (n + 1) * 0.7));
+    S.forEach(x => {
+      const X = ax.sx(x.n), Y = ax.sy(x.iters);
+      s += `<rect x="${(X - bw / 2).toFixed(1)}" y="${Y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(ax.sy(0) - Y).toFixed(1)}" class="f-blue" opacity=".75"/>`;
+      for (let h = 0; h < Math.min(x.halv, 6); h++) s += `<circle cx="${X.toFixed(1)}" cy="${(Y - 6 - h * 7).toFixed(1)}" r="2.6" class="f-red"/>`;
+    });
+    [[Q.desMin, 'Desired min'], [Q.desMax, 'Desired max']].forEach(([v, t]) => { s += `<line class="guide" x1="${M.l}" x2="${M.l + ax.pw}" y1="${ax.sy(v)}" y2="${ax.sy(v)}"/><text class="txt-muted" x="${M.l + ax.pw - 4}" y="${ax.sy(v) - 4}" text-anchor="end">${t}</text>`; });
+    s += '</g>';
+    svg.innerHTML = s;
+  }
+  function pick() {
+    const S = R.steps, i = +$('stepSel').value;
+    const failed = i > S.length;
+    const x = failed ? null : S[i - 1];
+    const eh = failed ? R.lastFail.errHist : (x ? x.errHist : []);
+    $('stepOut').textContent = failed ? '最後一次失敗的嘗試' : `第 ${i} 步`;
+    $('pDh').textContent = failed ? '最後一次失敗嘗試的 Global error（未收斂，步長減半）' : `第 ${i} 步的 Global error 收斂歷程`;
+    const svg = $('pD');
+    const lo = Math.min(Q.tol / 10, ...eh.filter(e => e > 0)), hi = Math.max(1, ...eh);
+    const ax = axes(svg, { x: [0, Math.max(eh.length + 1, 4)], xt: intTicks(Math.max(eh.length + 1, 4)), y: [Math.pow(10, Math.floor(Math.log10(lo))), Math.pow(10, Math.ceil(Math.log10(hi)))], ylog: true, xl: '迭代次數 iteration', yl: 'Global error' });
+    let s = ax.s + `<g ${ax.clip}>`;
+    s += `<line x1="${M.l}" x2="${M.l + ax.pw}" y1="${ax.sy(Q.tol)}" y2="${ax.sy(Q.tol)}" class="s-red" stroke-width="1.4" stroke-dasharray="6 4"/><text class="txt-red" x="${M.l + ax.pw - 4}" y="${ax.sy(Q.tol) - 5}" text-anchor="end">Tolerated error</text>`;
+    const pts = eh.map((e, j) => [j + 1, Math.max(e, 1e-30)]);
+    s += `<path d="${path(pts, ax.sx, ax.sy)}" class="${failed ? 's-red' : 's-blue'}" fill="none" stroke-width="1.6"/>`;
+    pts.forEach(p => s += `<circle cx="${ax.sx(p[0]).toFixed(1)}" cy="${ax.sy(p[1]).toFixed(1)}" r="3.2" class="${failed ? 'f-red' : 'f-blue'}"/>`);
+    s += '</g>';
+    svg.innerHTML = s;
+    // Active tasks 對照
+    const rows = failed ? [
+      ['ΣMstage（上一步）', fmt(S.length ? S[S.length - 1].lam : 0)], ['嘗試到達的 ΣMstage', fmt(R.lastFail.at)],
+      ['Iteration', `${eh.length} ／ ${Q.desMax}（Desired max）`], ['Global error ／ Tolerance', `${eh[eh.length - 1].toFixed(4)} ／ ${Q.tol}`],
+      ['結果', R.lastFail.singular ? '勁度矩陣奇異，無法求解' : '超過 Desired max 未收斂 → 步長減半'], ['', '']
+    ] : [
+      ['ΣMstage', fmt(x.lam)], ['Stiffness（CSP）', fmt(x.csp)],
+      ['Current step ／ Max. step', `${x.n} ／ ${Q.maxSteps}`], ['Iteration ／ Max. iterations', `${x.iters} ／ ${Q.maxIt}`],
+      ['Global error ／ Tolerance', `${eh[eh.length - 1].toFixed(4)} ／ ${Q.tol}`], ['Plastic stress points', `${x.npl} ／ 12`],
+      ['本步 ΔΣMstage', (x.Dlam >= 0 ? '+' : '') + x.Dlam.toFixed(4)], ['控制方式', x.arc ? 'Arc-length' : '載重控制'],
+      ['這一步減半重算', `${x.halv} 次`], ['總位移（本 phase）', x.u.toFixed(3)]
+    ];
+    let h = '';
+    for (let k = 0; k < rows.length; k += 2) h += `<tr><td>${rows[k][0]}</td><td>${rows[k][1]}</td><td>${rows[k + 1] ? rows[k + 1][0] : ''}</td><td>${rows[k + 1] ? rows[k + 1][1] : ''}</td></tr>`;
+    $('at').innerHTML = h;
+  }
+  $('stepSel').addEventListener('input', () => { pick(); $('stepSel').style.setProperty('--pct', (($('stepSel').value - 1) / Math.max(1, $('stepSel').max - 1) * 100) + '%'); });
+  apply(DEF);
+  pr.querySelector('.btn').classList.add('on');
+})();
+</script>
+</body>
+</html>

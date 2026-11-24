@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Input: Pre-Processing · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+  .steprow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px 32px; align-items: start; margin: 1.6em 0; }
+  .steprow > div > :first-child { margin-top: 0; }
+  @media (max-width: 1100px) { .steprow { grid-template-columns: minmax(0, 1fr); } }
+  .gui-steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .gui-steps li { counter-increment: s; position: relative; padding: 4px 0 10px 40px; line-height: 1.6; }
+  .gui-steps li::before { content: counter(s); position: absolute; left: 0; top: 3px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; text-align: center; line-height: 26px; }
+  .gui-steps li small { display: block; color: var(--muted); font-size: 13.5px; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .shots.tall { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .shots figure.shot { margin: 0; }
+  figure.shot img.narrow { max-width: 420px; }
+  .kbd { display: inline-block; font-size: 13px; background: var(--chip); border-radius: 6px; padding: 0 7px; font-family: var(--font-mono); }
+  .gui { font-weight: 600; }
+  table.data td code { white-space: nowrap; }
+  .syn td:first-child { white-space: nowrap; font-weight: 600; }
+</style>
+</head>
+<body data-page="ch2" data-root="" data-title="2 · Input: Pre-Processing">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 2</div>
+  <h1>Input: Pre-Processing</h1>
+  <p class="lede"><b>在 PLAXIS Input 裡按的每一個按鈕，背後都是一行文字指令（Command）。</b>把指令存成一份 txt，就得到一個可以重跑、可以逐行比對、可以批次修改的模型。這一章用光明地下廠房 plan_e 的建模過程，一步一張 GUI 截圖，旁邊對照同一件事的 Command 寫法。</p>
+  <div class="callout question"><div class="ct">這一章要回答</div><p>建一個分階開挖模型要經過哪幾步？每一步在 GUI 哪裡設定？同一步用 Commands runner 要怎麼寫？</p></div>
+</header>
+
+<section class="sec" id="s1" data-num="2.1" data-short="GUI 與 Command">
+  <div class="sec-head"><span class="sec-num">2.1</span><h2>GUI 與 Command 的關係</h2></div>
+  <p>PLAXIS Input 的畫面上方是五個模式頁籤，建模就是由左到右走一遍：<span class="gui">Soil → Structures → Mesh → Flow conditions → Staged construction</span>。前三個建立「模型」，後兩個建立「計算相位」。</p>
+  <p>畫面最下方是 <b>Command line</b>。用滑鼠做的任何操作，PLAXIS 都會先翻譯成一行指令再執行，並顯示在這裡：</p>
+  <ul>
+    <li><b>Session</b> 頁籤：這次開檔以來執行過的指令與回饋（綠字成功、紅字錯誤）。</li>
+    <li><b>Model history</b> 頁籤：整個專案從建立以來的全部指令。右鍵可以複製全部或只複製成功的指令，貼到文字檔就是一份建模腳本。</li>
+  </ul>
+  <figure class="shot"><img src="assets/img/ch2/s08_1.png" alt="PLAXIS Input 畫面" loading="lazy"><figcaption>Input 的 Structures 模式。下方 Command line 顯示剛才畫 polygon 的指令（0025、0026），以及 GUI 指定材料時自動產生的 <code>_set</code> 指令（0027）。</figcaption></figure>
+
+  <h3>三種執行指令的方式</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>方式</th><th>位置</th><th>適合</th></tr>
+    <tr><td>Command line</td><td>Input／Output 畫面下方</td><td>逐行試指令、查屬性名稱</td></tr>
+    <tr><td><b>Commands runner</b></td><td>Expert &gt; Run commands</td><td><b>整份 txt 貼上一次執行</b>：這一章的主角</td></tr>
+    <tr><td>Macro library</td><td>Expert &gt; Macro library</td><td>常用的一小段指令存起來重複用</td></tr>
+    <tr><td>Python（remote scripting）</td><td>Expert &gt; Configure remote scripting server</td><td>需要迴圈、條件判斷、讀檔時；語法是同一套指令的 Python 包裝</td></tr>
+  </table></div>
+  <p>Python 版只是把同一個指令變成函式呼叫，參數順序完全相同，所以學會 Command 等於學會一半的 Python 建模：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>Command</th><th>Python（g_i = Input 伺服器）</th></tr>
+    <tr><td><code>borehole 0</code></td><td><code>g_i.borehole(0)</code></td></tr>
+    <tr><td><code>polygon (0 0) (5 0) (5 3)</code></td><td><code>g_i.polygon((0, 0), (5, 0), (5, 3))</code></td></tr>
+    <tr><td><code>set Phase_1.Deform.Loading.SumMstage 1.0</code></td><td><code>g_i.Phase_1.Deform.Loading.SumMstage = 1.0</code></td></tr>
+    <tr><td><code>deactivate Soil_6_1 Phase_1</code></td><td><code>g_i.deactivate(g_i.Soil_6_1, g_i.Phase_1)</code></td></tr>
+  </table></div>
+  <div class="callout intuition"><div class="ct">為什麼要用 Command 建模</div>
+    <p>① <b>可重現</b>：同一份 txt 在新專案貼上，得到完全相同的網格與相位。② <b>可比對</b>：兩個案例差在哪裡，用文字比對工具一眼看出。③ <b>可批次修改</b>：17 個相位都要改容許誤差，在 txt 裡取代一次就好，不用在 GUI 點 17 次。④ <b>可留紀錄</b>：每一行可以寫註解，交代數值從哪裡來。</p></div>
+</section>
+
+<section class="sec" id="s2" data-num="2.2" data-short="Command 語法">
+  <div class="sec-head"><span class="sec-num">2.2</span><h2>Command 語法規則</h2></div>
+  <p>一行指令＝<b>指令名稱＋參數</b>。參數的個數與型別由指令決定。指令分兩類：</p>
+  <div class="grid2">
+    <div class="card"><h4>全域指令（global）</h4><p>對整個專案或幾何作用，不需要指定對象。例如 <code>borehole 0</code>、<code>polygon …</code>、<code>mesh 0.015</code>、<code>gotostages</code>、<code>undo</code>。</p></div>
+    <div class="card"><h4>目標指令（target）</h4><p>對指定的物件作用，第一個參數是物件名稱。例如 <code>set Phase_1.MaxCores 12</code>、<code>deactivate Soil_6_1 Phase_1</code>、<code>delete Polygon_3</code>。</p></div>
+  </div>
+  <h3>參數怎麼寫</h3>
+  <div class="tablewrap"><table class="data syn">
+    <tr><th>項目</th><th>規則</th><th>例子</th></tr>
+    <tr><td>物件名稱</td><td>直接寫名稱，不加引號；名稱不能以底線開頭</td><td><code>Rock_MC_TC289</code>、<code>Phase_3</code></td></tr>
+    <tr><td>屬性</td><td>物件名稱後面用點串接，可以一路往下</td><td><code>Phase_1.Deform.Loading.SumMstage</code></td></tr>
+    <tr><td>字串</td><td>單引號或雙引號都可以；中文可用</td><td><code>"L01_主廠房頂拱中央導坑"</code></td></tr>
+    <tr><td>數字</td><td>小數點一律用「.」；可用科學記號</td><td><code>15000000.0</code>、<code>1.5e7</code></td></tr>
+    <tr><td>布林</td><td><code>True</code>／<code>False</code>（大寫開頭）</td><td><code>"TensionCutOff" True</code></td></tr>
+    <tr><td>列舉</td><td>寫字串（GUI 上顯示的文字）或整數索引</td><td><code>"K0 procedure"</code>、<code>"SoilModel" 2</code></td></tr>
+    <tr><td>座標</td><td>可加括號分組，增加可讀性</td><td><code>polygon (0 0) (5 0) (5 3)</code></td></tr>
+    <tr><td>索引</td><td>串列可用 [n] 取第 n 個（從 0 起算，負數從尾端）</td><td><code>Points[0]</code>、<code>Phases[-1]</code></td></tr>
+    <tr><td>註解</td><td><code>#</code> 之後到行尾都不執行；可以單獨一行，也可以接在指令後面</td><td><code>point 0 -288.3  # 拱頂</code></td></tr>
+  </table></div>
+  <h3>底線前綴與查詢指令</h3>
+  <ul>
+    <li><b>底線前綴</b>：GUI 產生的指令前面會加 <code>_</code>（例如 <code>_set</code>、<code>_polygon</code>），用來和同名物件區分；自己寫的時候可以省略，<code>set</code> 和 <code>_set</code> 完全相同。</li>
+    <li><b>查屬性名稱</b>：在 GUI 改一次你想設定的欄位，再到 Command line 看它產生的 <code>_set 物件.屬性 值</code>，照抄即可。這是找出「GUI 欄位 ↔ 指令屬性名」最快的方法。</li>
+    <li><b>列出物件</b>：<code>echo Phase_1</code> 顯示物件的屬性與子物件名稱；<code>tabulate Points "x y"</code> 把一類物件列成表。</li>
+    <li><b>指令簽名</b>：<code>cms</code> 列出所有指令與參數組合；完整說明在 Help &gt; Command reference。</li>
+  </ul>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 在 Command line 試一試</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx">echo Rock_MC_TC289                 # 看材料的全部屬性名稱與目前值
+echo Phase_1.Deform                # 看相位計算設定（ΣMstage、迭代參數…）
+tabulate Points "x y"              # 列出所有幾何點座標
+cms                                # 列出所有指令的參數格式</code></pre></div>
+</section>
+
+<section class="sec" id="s3" data-num="2.3" data-short="建模流程總表">
+  <div class="sec-head"><span class="sec-num">2.3</span><h2>建模流程總表</h2></div>
+  <p>以下各節的範例都取自 <a href="files/KuanMing_plan_e7.txt"><code>KuanMing_plan_e7.txt</code></a>（光明地下廠房，主廠房＋主變室、17 階分階開挖、無支撐）。整份 414 行，分成 8 節，和 GUI 的操作順序一一對應：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>#</th><th>步驟</th><th>GUI 位置</th><th>主要 Command</th><th>本章</th></tr>
+    <tr><td>1</td><td>分析域與鑽孔</td><td>File &gt; Project properties；Soil 模式 &gt; Create borehole</td><td><code>initializerectangular</code>、<code>borehole</code>、<code>soillayer</code></td><td>2.4</td></tr>
+    <tr><td>2</td><td>材料</td><td>Show materials &gt; Soil and interfaces</td><td><code>soilmat</code>、<code>set 材料.屬性</code></td><td>2.5</td></tr>
+    <tr><td>3</td><td>幾何與量測點</td><td>Structures 模式 &gt; Create soil polygon／point</td><td><code>gotostructures</code>、<code>polygon</code>、<code>point</code></td><td>2.6</td></tr>
+    <tr><td>4</td><td>網格</td><td>Mesh 模式 &gt; Refine／Generate mesh</td><td><code>gotomesh</code>、<code>CoarsenessFactor</code>、<code>mesh</code></td><td>2.7</td></tr>
+    <tr><td>5</td><td>施工相位</td><td>Staged construction &gt; Phases</td><td><code>gotostages</code>、<code>phase</code>、<code>deactivate</code></td><td>2.8</td></tr>
+    <tr><td>6</td><td>迭代參數</td><td>Phases &gt; Numerical control parameters</td><td><code>set Phase_n.Deform.…</code></td><td>2.9</td></tr>
+    <tr><td>7</td><td>量測點（curve points）</td><td>Select points for curves（Output）</td><td><code>selectmeshpoints</code>、<code>acp</code>、<code>update</code></td><td>2.10</td></tr>
+    <tr><td>8</td><td>計算與存檔</td><td>Calculate</td><td><code>calculate</code>、<code>save</code></td><td>2.10</td></tr>
+  </table></div>
+  <h3>txt 的使用方式</h3>
+  <ol class="steps">
+    <li>PLAXIS 2D Input 開<b>新專案</b>（預設 kN、m、Plane strain、15-Noded 即可）。</li>
+    <li><span class="gui">Expert &gt; Run commands</span> 開 Commands runner，整份貼上執行。第一行 <code>save "…\xxx.p2dx"</code> 先決定存檔位置。</li>
+    <li>執行到第 7 節的 <code>acp</code> 會停下（那是 Output 的指令），此時前 6 節已完成並存檔。</li>
+    <li>回 Staged construction 按 <span class="gui">Select points for curves</span> 開 Output，把第 7 節貼進 <b>Output 的</b> Commands runner。</li>
+    <li>回 Input 按 Calculate（或執行 <code>calculate</code>、<code>save</code>）。</li>
+  </ol>
+  <div class="callout pitfall"><div class="ct">不要在已有物件的專案裡貼</div><p>PLAXIS 依建立順序自動命名（Polygon_1、Soil_2…），而且在網格與相位模式會把交切後的區塊重新命名。專案裡若已經有別的物件，所有編號都會錯開，後面的 <code>set</code>、<code>deactivate</code> 就會出現 <code>Unknown object</code>。</p></div>
+</section>
+
+<section class="sec" id="s4" data-num="2.4" data-short="① 分析域與鑽孔">
+  <div class="sec-head"><span class="sec-num">2.4</span><h2>① 分析域與鑽孔</h2></div>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li><span class="gui">File &gt; Project properties &gt; Model</span>：單位 kN、m；Model 選 Plane strain；Elements 選 15-Noded。</li>
+        <li>同一頁 <span class="gui">Contour</span>：x<sub>min</sub> −315、x<sub>max</sub> 360、y<sub>min</sub> −637.8、y<sub>max</sub> 0。<small>座標系：x 以主廠房中心為 0；Y ＝ EL − 1203，地表為 0。</small></li>
+        <li>Soil 模式按 <span class="gui">Create borehole</span>，在 x ＝ 0 點一下，開出 Modify soil layers。</li>
+        <li><span class="gui">Add</span> 一層：Top 0、Bottom −637.8（單一岩層建到模型底）。</li>
+        <li>Borehole 的 <span class="gui">Head</span> 設 −647.8：水位在模型底以下，整個模型是乾的。</li>
+      </ol>
+      <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 1 節</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 1. 分析域與鑽孔 ──
+initializerectangular SoilContour -315 -637.8 360 0   # xmin ymin xmax ymax
+borehole 0                                            # 在 x = 0 建鑽孔 → Borehole_1
+soillayer 637.8                                       # 加一層厚 637.8 m → Soillayer_1
+set Borehole_1.Head -647.8                            # 水頭在模型底以下（乾燥）</code></pre></div>
+    </div>
+    <div class="shots">
+      <figure class="shot"><img class="narrow" src="assets/img/ch2/s05_2.png" alt="Contour 設定" loading="lazy"><figcaption>Project properties 的 Contour</figcaption></figure>
+      <figure class="shot"><img src="assets/img/ch2/s05_1.png" alt="Modify soil layers" loading="lazy"><figcaption>Modify soil layers：一層 0 → −637.8，Head −647.8</figcaption></figure>
+    </div>
+  </div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>指令</th><th>參數</th><th>產生的物件</th></tr>
+    <tr><td><code>initializerectangular SoilContour</code></td><td>x<sub>min</sub> y<sub>min</sub> x<sub>max</sub> y<sub>max</sub>（注意順序是左下、右上）</td><td>矩形分析域</td></tr>
+    <tr><td><code>borehole</code></td><td>x 座標</td><td><code>Borehole_1</code>、<code>BoreholePolygon_1</code></td></tr>
+    <tr><td><code>soillayer</code></td><td>這一層的厚度（由上往下累加）</td><td><code>Soillayer_1</code>、土體 <code>Soil_1</code></td></tr>
+  </table></div>
+  <div class="callout example"><div class="ct">分析域多大？</div><p>這個例子的範圍照對照的 OpenSees 模型：洞室左右各約 300 m、底部到洞底以下約 300 m。範圍是否足夠，可以用「邊界上的應力變化小於 1%」檢查；這屬於建立模型的判斷，在第 1 章討論。</p></div>
+</section>
+
+<section class="sec" id="s5" data-num="2.5" data-short="② 材料">
+  <div class="sec-head"><span class="sec-num">2.5</span><h2>② 材料</h2></div>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li><span class="gui">Show materials &gt; Soil and interfaces &gt; New</span>：Soil model 選 Mohr-Coulomb、Drainage type 選 Drained、γ<sub>unsat</sub>＝γ<sub>sat</sub>＝27 kN/m³。</li>
+        <li><span class="gui">Mechanical</span> 頁：E′ 15E6 kN/m²、ν′ 0.24、c′ 1351 kN/m²、φ′ 38.8°、ψ 0。</li>
+        <li>Tension cut-off 打勾，Tensile strength 289 kN/m²。</li>
+        <li><span class="gui">Initial</span> 頁：K0 determination 選 Manual，K0,x 0.485、K0,z 0.3564，取消 K0,x ＝ K0,z。</li>
+        <li>把材料拖到 Modify soil layers 的第 1 層，或在 Soil 模式選土層指定。</li>
+      </ol>
+      <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 2 節</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 2. 岩體材料 ──
+# 建立材料：soilmat 後面接「"屬性名" 值」成對排列
+soilmat "Identification" "Rock_MC_TC289" "SoilModel" 2 "DrainageType" "Drained" "gammaUnsat" 27.0 "gammaSat" 27.0 "nu" 0.24 "Eref" 15000000.0 "cref" 1351.0 "phi" 38.8 "psi" 0.0 "TensionCutOff" True "TensileStrength" 289.0
+# 建好之後也可以用 set 逐項修改
+set Rock_MC_TC289.K0Determination "Manual"
+set Rock_MC_TC289.K0PrimaryIsK0Secondary False
+set Rock_MC_TC289.K0Primary 0.485
+set Rock_MC_TC289.K0Secondary 0.3564
+# 指定給鑽孔土層
+set Soillayer_1.Soil.Material Rock_MC_TC289</code></pre></div>
+      <p style="font-size:14px;color:var(--muted)">Commands runner 一行就是一個指令，<code>soilmat</code> 再長也<b>不能換行</b>（區塊可以左右捲動）。</p>
+    </div>
+    <div class="shots tall">
+      <figure class="shot"><img src="assets/img/ch2/s06_1.png" alt="General 頁" loading="lazy"><figcaption>General：模型、排水型態、單位重</figcaption></figure>
+      <figure class="shot"><img src="assets/img/ch2/s06_2.png" alt="Mechanical 頁" loading="lazy"><figcaption>Mechanical：勁度、強度、張力截斷</figcaption></figure>
+      <figure class="shot"><img src="assets/img/ch2/s06_3.png" alt="Initial 頁 K0" loading="lazy"><figcaption>Initial：K0 settings</figcaption></figure>
+    </div>
+  </div>
+  <h3>GUI 欄位與屬性名稱對照</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>GUI 欄位</th><th>屬性名稱</th><th>這個例子</th><th>說明</th></tr>
+    <tr><td>Identification</td><td><code>Identification</code></td><td>"Rock_MC_TC289"</td><td>材料名稱，之後用它指定</td></tr>
+    <tr><td>Soil model</td><td><code>SoilModel</code></td><td>2</td><td>索引依 GUI 下拉選單順序：1 Linear elastic、2 Mohr-Coulomb…（也可寫名稱字串）</td></tr>
+    <tr><td>Drainage type</td><td><code>DrainageType</code></td><td>"Drained"</td><td>"Undrained (A)"、"Undrained (B)"、"Undrained (C)"、"Non-porous"</td></tr>
+    <tr><td>γ<sub>unsat</sub>／γ<sub>sat</sub></td><td><code>gammaUnsat</code>／<code>gammaSat</code></td><td>27.0</td><td>kN/m³</td></tr>
+    <tr><td>E′<sub>ref</sub></td><td><code>Eref</code></td><td>15000000.0</td><td>kN/m²（15 GPa）</td></tr>
+    <tr><td>ν′</td><td><code>nu</code></td><td>0.24</td><td></td></tr>
+    <tr><td>c′<sub>ref</sub>／φ′／ψ</td><td><code>cref</code>／<code>phi</code>／<code>psi</code></td><td>1351／38.8／0</td><td>kN/m²、度</td></tr>
+    <tr><td>Tension cut-off</td><td><code>TensionCutOff</code>、<code>TensileStrength</code></td><td>True、289.0</td><td></td></tr>
+    <tr><td>K0 determination</td><td><code>K0Determination</code></td><td>"Manual"</td><td>預設 "Automatic"＝1 − sinφ</td></tr>
+    <tr><td>K0,x ＝ K0,z</td><td><code>K0PrimaryIsK0Secondary</code></td><td>False</td><td></td></tr>
+    <tr><td>K0,x／K0,z</td><td><code>K0Primary</code>／<code>K0Secondary</code></td><td>0.485／0.3564</td><td>面內／出平面方向</td></tr>
+  </table></div>
+  <details class="derive"><summary>結構材料：Plate、Anchor、Embedded beam 的寫法（plan_p 有支撐模型）</summary><div class="body">
+    <p>結構材料一樣是「指令名稱＋屬性對」，只是指令換成 <code>platemat</code>、<code>anchormat</code>、<code>embeddedbeammat</code>。下面取自有支撐的 plan_p 模型：</p>
+    <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># 噴凝土 12 cm（Plate，彈性）
+platemat "Identification" "Shotcrete_12cm" "MaterialType" "Elastic" "Isotropic" True "EA1" 2400000.0 "EI" 2880.0 "structNu" 0.2 "w" 3.18
+# 地錨自由段（Node-to-node anchor，彈塑性，Fmax 671.5 kN）
+anchormat "Identification" "Anchor_free_9m" "MaterialType" "Elastoplastic" "EA" 152807.07 "Fmaxcomp" 671.5 "Fmaxtens" 671.5 "Lspacing" 1.5
+# 岩栓（Embedded beam row，Ø32、間距 1.5 m）
+embeddedbeammat "Identification" "Rockbolt_6m" "MaterialType" "Elastic" "gamma" 0.0 "E" 190000000.0 "CrossSectionType" "UserDefined" "A" 0.000804248 "I" 5.1472e-08 "Lspacing" 1.5 "AxialSkinResistance" "Linear" "TSkinStartMax" 100000.0 "TSkinEndMax" 100000.0 "Fmax" 0.0</code></pre></div>
+    <p>注意單位：截面積 <code>A</code> 是 m²（Ø32 → 8.042E-4 m²），在 GUI 填成 8.04 就變成 8.04 m²，勁度放大一萬倍。</p>
+  </div></details>
+</section>
+
+<section class="sec" id="s6" data-num="2.6" data-short="③ 幾何與量測點">
+  <div class="sec-head"><span class="sec-num">2.6</span><h2>③ 幾何與量測點</h2></div>
+  <p>開挖要「挖得掉」，就必須先把每一階要挖的岩體畫成獨立的 polygon。這個模型的幾何照對照的 OpenSees 模型：主廠房（開挖寬 25.4 m）與主變室（17.8 m），岩柱 30 m，共 17 階。</p>
+  <figure class="shot"><img src="assets/img/ch2/s07_1.png" alt="洞室幾何與分階" loading="lazy"><figcaption>洞室幾何與 17 階分階（數字＝階號；黑：主廠房、藍：主變室）</figcaption></figure>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li>切到 <span class="gui">Structures</span> 模式，用 <span class="gui">Create soil polygon</span> 畫圖形。</li>
+        <li>先畫網格加密用的矩形：加密區（洞外 25 m）、15 m 矩形、兩洞各自的 6 m 矩形。<small>這些矩形不挖，只用來在網格模式分區設定元素大小。</small></li>
+        <li>再畫開挖區：主廠房 18 個（導坑、左右擴挖、15 個台階）、主變室 9 個。</li>
+        <li>每個 polygon 指定材料 Rock_MC_TC289。</li>
+        <li>最後用 <span class="gui">Create point</span> 在量測位置建幾何點，讓那裡一定有網格節點。</li>
+      </ol>
+    </div>
+    <div class="shots">
+      <figure class="shot"><img src="assets/img/ch2/s08_2.png" alt="加密矩形與開挖區" loading="lazy"><figcaption>加密矩形（淺藍）與選取中的開挖區（紅）</figcaption></figure>
+      <figure class="shot"><img src="assets/img/ch2/s09_1.png" alt="量測點" loading="lazy"><figcaption>11 個量測點（黑點）</figcaption></figure>
+    </div>
+  </div>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 3 節（節錄）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 3. 幾何 ──
+gotostructures                                        # 切到 Structures 模式
+# 加密區 Polygon_1：兩洞外接矩形外推 25 m
+polygon (-37.7 -362.8) (85.5 -362.8) (85.5 -263.3) (-37.7 -263.3)
+set Soil_2.Material Rock_MC_TC289                     # 第 1 個 polygon 的土體叫 Soil_2
+# 15 m 矩形 Polygon_2、主廠房 6 m 矩形 Polygon_3、主變室 6 m 矩形 Polygon_4
+polygon (-27.7 -352.8) (75.5 -352.8) (75.5 -273.3) (-27.7 -273.3)
+set Soil_3.Material Rock_MC_TC289
+…
+# 主廠房 L01 導坑 Polygon_5：頂拱用折線逼近圓弧（首尾不必重複，PLAXIS 自動封閉）
+polygon (4.2 -293.8) (4.2 -288.7198) (3.4152 -288.5766) (2.5663 -288.4557) (1.7132 -288.3693) (0.8573 -288.3173) (0 -288.3) (-0.8573 -288.3173) (-1.7132 -288.3693) (-2.5663 -288.4557) (-3.4152 -288.5766) (-4.2 -288.7198) (-4.2 -293.8)
+set Soil_6.Material Rock_MC_TC289
+# 主廠房 L03 台階 Polygon_8（矩形加上拱腳一小段弧）
+polygon (12.7 -296.4) (12.7 -295.4) (12.6516 -294.6882) (12.4507 -293.8) (-12.4507 -293.8) (-12.6516 -294.6882) (-12.7 -295.4) (-12.7 -296.4)
+set Soil_9.Material Rock_MC_TC289
+…
+# 量測點：放在所有 polygon 之後建立，不改變 polygon／土體的編號
+point 0 -288.3            # PH_CROWN：主廠房拱頂
+point 0 -263.3            # PH_CROWN_REF：拱頂上方 25 m 參考點
+point -12.7 -316.6        # PH_WALL_L：主廠房左牆 EL.886.4
+point 12.7 -316.6         # PH_WALL_R：主廠房右牆（岩柱側）
+…</code></pre></div>
+  <h3>命名規則：最容易出錯的地方</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>模式</th><th>物件名稱</th><th>規則</th></tr>
+    <tr><td>Structures</td><td><code>Polygon_k</code>、<code>Soil_(k+1)</code></td><td>依建立順序編號。鑽孔土層先占了 <code>Soil_1</code>，所以第 k 個 polygon 的土體是 Soil_(k+1)</td></tr>
+    <tr><td>Mesh</td><td><code>BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1</code></td><td>交切後的區塊：把「包住它的所有 polygon」由外而內串起來，最後加 _1</td></tr>
+    <tr><td>Staged construction</td><td><code>Soil_1_Soil_2_Soil_3_Soil_4_Soil_6_1</code></td><td>同樣的交切規則，但用土體名稱串接</td></tr>
+  </table></div>
+  <p>以主廠房導坑（Polygon_5）為例：它位在鑽孔土層、加密區、15 m 矩形、主廠房 6 m 矩形之內，所以在網格模式叫 <code>BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1</code>，在相位模式叫 <code>Soil_1_Soil_2_Soil_3_Soil_4_Soil_6_1</code>。<b>名稱完全取決於幾何指令的順序</b>，所以 txt 裡的幾何指令不可增刪、調換。</p>
+  <div class="callout pitfall"><div class="ct">幾何的三個陷阱</div>
+    <p>① <b>同一組點</b>：相鄰兩個開挖區共用的邊（例如導坑與擴挖的分界、拱腳弧線）要用完全相同的座標，捨入到 0.1 mm；鏡射另算一組點會夾出極薄的岩體細條，開挖後位移發散。② <b>碎小元素</b>：分階線和圓弧的交點附近若還留著原本的弧點（相距 0.2 m 以內），會產生很小的元素，刪掉那個弧點。③ <b>量測點最後建</b>：point 放在所有 polygon 之後，才不會改變 polygon 的編號。</p></div>
+  <details class="derive"><summary>結構物：線、Plate、介面、岩栓、地錨的寫法</summary><div class="body">
+    <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command（plan_p 節錄）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx">line (12.918 -292) (12.9094 -291.7002)                 # 先畫線 → Line_1
+plate Line_1                                          # 在線上建 Plate → Plate_1
+neginterface Line_1                                   # 在線的負側建介面 → NegativeInterface_1
+set Plate_1.Material Shotcrete_12cm
+embeddedbeam (12.918 -292) (18.918 -292)              # 岩栓：起點在襯砌上、往岩體延伸 6 m
+set EmbeddedBeam_1.Material Rockbolt_6m
+set EmbeddedBeam_1.Behaviour "Rock bolt"
+n2nanchor (12.918 -292.6178) (21.7813 -294.1806)      # 地錨自由段
+set NodeToNodeAnchor_1.Material Anchor_free_9m</code></pre></div>
+    <p>結構物在 Structures 模式建立，在 Staged construction 模式用 <code>activate 物件 相位</code> 啟用。進到相位模式後，線狀物件也會被交切成 <code>Plate_3_1</code>、<code>EmbeddedBeam_5_EmbeddedBeam_6_1</code> 之類的名稱。懸空的岩栓或地錨端點，每一個都算網格中的一個「洞」，數量超過 25 個網格就會失敗，岩栓起點要落在襯砌折線的頂點上。</p>
+  </div></details>
+</section>
+
+<section class="sec" id="s7" data-num="2.7" data-short="④ 網格">
+  <div class="sec-head"><span class="sec-num">2.7</span><h2>④ 網格</h2></div>
+  <p>元素大小由兩層設定決定：<b>全域的基準尺寸 l<sub>e</sub></b>，乘上<b>每個幾何物件的粗細係數 cf</b>。</p>
+  <div class="eqbox">$$l_e = r_e \times 0.06 \times \sqrt{(x_{max}-x_{min})^2 + (y_{max}-y_{min})^2}, \qquad \text{目標尺寸} = cf \times l_e$$</div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>符號</th><th>英文名稱</th><th>GUI 位置</th><th>Command</th><th>意義</th></tr>
+    <tr><td>r<sub>e</sub></td><td>Relative element size (factor)</td><td>Mesh options &gt; Element distribution；Expert settings</td><td><code>mesh</code> 後面的數字＝r<sub>e</sub> × 0.06</td><td>相對尺寸等級，Medium＝1.0</td></tr>
+    <tr><td>l<sub>e</sub></td><td>Element dimension（target element dimension）</td><td>Mesh options &gt; Expert settings</td><td>由上式算出</td><td>基準尺寸：沒另外設 cf 的地方都朝它長</td></tr>
+    <tr><td>cf</td><td>Coarseness factor</td><td>Selection explorer</td><td><code>set 物件.CoarsenessFactor</code></td><td>相對 l<sub>e</sub> 的倍數，&lt; 1 變細、&gt; 1 變粗</td></tr>
+  </table></div>
+  <p>l<sub>e</sub> 是「沒有另外指定處」的尺寸，不等於「最外圍的尺寸」。只有在外框沒設 cf、模型內部也沒有其他未設 cf 的線時，外框附近的元素才約等於 l<sub>e</sub>。cf 的預設值：土層、polygon、一般線與點為 1；結構元素（plate、anchor、embedded beam…）與荷重為 0.25。</p>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li><span class="gui">Mesh options &gt; Element distribution</span>：五級 r<sub>e</sub>＝2.0／1.33／1.0（Medium，預設）／0.67／0.5；Expert settings 可自訂 r<sub>e</sub>＝0.25。<small>指令裡的數字是 r<sub>e</sub> × 0.06＝0.015。</small></li>
+        <li>這個模型：l<sub>e</sub>＝0.015 × √(675² ＋ 637.8²)＝0.015 × 928.7＝13.93 m。</li>
+        <li>選 polygon，在 Selection explorer 填 <span class="gui">Coarseness factor</span>：cf＝目標尺寸 ÷ l<sub>e</sub>（0.5 m → 0.0359、1 m → 0.0718、2.5 m → 0.179）。</li>
+        <li>按 <span class="gui">Generate mesh</span>，再用 View mesh 開 Output 檢查。</li>
+      </ol>
+      <div class="callout pitfall"><div class="ct">cf 有上下限</div><p>cf 只能設 0.03125～8，所以最小元素＝0.03125 × l<sub>e</sub>。預設 Medium 時 l<sub>e</sub>＝55.7 m，最小只能到 1.74 m；要 0.5 m 的元素，l<sub>e</sub> 必須 ≤ 16 m，所以這個模型把 r<sub>e</sub> 降到 0.25。</p></div>
+    </div>
+    <figure class="shot" style="margin:0"><img src="assets/img/ch2/s10_1.png" alt="網格" loading="lazy"><figcaption>網格（洞周 6 m 內 0.5 m、15 m 內 1 m 的版本）</figcaption></figure>
+  </div>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 4 節（節錄）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 4. 網格 ──
+gotomesh                                              # 切到 Mesh 模式（物件改用交切後的名稱）
+# 開挖區：名稱 = 外層 polygon 由外而內串接
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1.CoarsenessFactor 0.179470   # 主廠房導坑
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_6_1.CoarsenessFactor 0.179470   # 右擴挖
+…
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_Polygon_31_1.CoarsenessFactor 0.179470  # 主變室 L17
+# 加密矩形「扣掉內部物件之後」剩下的環帶
+set BoreholePolygon_1_Polygon_1_Polygon_2_1.CoarsenessFactor 0.179470            # 15 m 矩形
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_1.CoarsenessFactor 0.179470  # 主廠房 6 m 矩形
+set BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_4_1.CoarsenessFactor 0.179470  # 主變室 6 m 矩形
+set BoreholePolygon_1_Polygon_1_1.CoarsenessFactor 0.179470                      # 加密區
+mesh 0.015                                            # 產生網格，element distribution = re × 0.06</code></pre></div>
+  <h3>l<sub>e</sub> 與 cf 怎麼決定</h3>
+  <p>先想好模型裡最細的尺寸 h<sub>min</sub>（洞周）與最粗的尺寸 h<sub>max</sub>（遠場），l<sub>e</sub> 必須讓兩端的 cf 都落在 0.03125～8 之內：</p>
+  <div class="eqbox">$$\frac{h_{\text{max}}}{8} \le l_e \le 32\,h_{\text{min}}$$</div>
+  <ol class="gui-steps">
+    <li>在這個範圍內依遠場要多粗、元素數要多少選 l<sub>e</sub>。這個模型 h<sub>min</sub>＝0.5 m → l<sub>e</sub> ≤ 16 m，取 13.93 m。</li>
+    <li>反推指令參數：<code>mesh</code> 的數字＝l<sub>e</sub> ÷ 對角線＝13.93 ÷ 928.7＝0.015（r<sub>e</sub>＝0.015 ÷ 0.06＝0.25）。也可以在 Expert settings 直接填 Element dimension。</li>
+    <li>每個要指定尺寸的物件：cf＝目標尺寸 ÷ l<sub>e</sub>。</li>
+  </ol>
+  <h3>網格產生器實際怎麼切</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>行為</th><th>說明</th><th>對建模的意義</th></tr>
+    <tr><td>實際尺寸會浮動</td><td>cf × l<sub>e</sub> 是目標值，不是保證值；每段幾何線大致切成 round(線長 ÷ 目標尺寸) 段，三角形再依品質調整</td><td>查網格時看的是「接近」目標尺寸，不會每個元素都剛好相同</td></tr>
+    <tr><td>中間自動漸變</td><td>只指定洞壁和外框時，兩者之間由產生器依距離平滑放大；相鄰三角形要共用邊、維持角度，所以細網格旁不能直接接粗網格，要經過好幾層才放大</td><td><b>成長率沒有參數可以設</b>。某段距離內要維持固定尺寸（例如洞周 6 m、15 m），就要畫加密區把那個範圍框起來</td></tr>
+    <tr><td>點距決定局部最小尺寸</td><td>兩點太近、很短的線段、兩條線之間很窄的縫、銳角交會，都會強迫產生很小或很扁的元素（碎片元素），不受 cf 控制</td><td>幾何點距要 ≥ 該處目標尺寸，例如拱弧點距＝網格尺寸。碎片元素會造成局部應力集中、收斂變難，可能引發局部發散</td></tr>
+    <tr><td>自動加密（EMR）</td><td>Mesh options 的 Enhanced mesh refinements 預設勾選：點或線距離很近時、兩線夾角不是 90° 的倍數時，自動再乘一個加密係數</td><td>拱腳、倒角、結構物附近會比設定值再細一些；需要時可取消勾選</td></tr>
+  </table></div>
+  <div class="callout intuition"><div class="ct">只設兩端 vs. 畫加密區</div><p><b>只設洞壁和 l<sub>e</sub></b>：設定簡單，但做網格收斂時改洞壁尺寸，整個過渡帶也一起變，結果混了兩個變因。<b>畫加密區（6m+15mRectangle）</b>：洞周 6 m 內固定 H、15 m 內固定 2H，15 m 以外才交給產生器漸變；網格收斂只改 H 一個變因，比較好解釋。</p></div>
+  <p>網格失敗時 Input 只會說 <code>Mesh output file not found</code>，真正的原因寫在 <code>%TEMP%\Plaxis2DXTemp\data.MeshInfo</code> 的 ERROR 段（例如 ERROR 1026＝岩體中的洞超過 25 個）。</p>
+</section>
+
+<section class="sec" id="s8" data-num="2.8" data-short="⑤ 施工相位">
+  <div class="sec-head"><span class="sec-num">2.8</span><h2>⑤ 施工相位</h2></div>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li>切到 <span class="gui">Staged construction</span>。Initial phase 的 Calculation type 選 <b>K0 procedure</b>：地表水平、單一岩層時，直接用 σ′<sub>v</sub>＝γz、σ′<sub>h</sub>＝K0 σ′<sub>v</sub> 給初始應力即為平衡。<small>地表或層面傾斜時要改用 Gravity loading。</small></li>
+        <li><span class="gui">Add phase</span>：新相位預設接在目前選取的相位之後。</li>
+        <li>在模型上點選本階要挖的 polygon，右鍵 Deactivate。</li>
+        <li>Phases 視窗：Loading type 為 Staged construction，ΣMstage 1.0（不平衡力 100% 釋放）。</li>
+        <li>重複 2–4 共 17 次；L05、L11–L17 兩個洞在同一相開挖。</li>
+      </ol>
+    </div>
+    <div class="shots">
+      <figure class="shot"><img src="assets/img/ch2/s11_1.png" alt="相位清單" loading="lazy"><figcaption>Phases explorer：Ph0 ＋ 17 相</figcaption></figure>
+      <figure class="shot"><img src="assets/img/ch2/s11_2.png" alt="初始相位選項" loading="lazy"><figcaption>Initial phase 的四種 Calculation type</figcaption></figure>
+    </div>
+  </div>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 5 節（節錄）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 5. 施工相位 ──
+gotostages                                            # 切到 Staged construction
+set InitialPhase.Identification "Ph0_地應力平衡"
+set InitialPhase.DeformCalcType "K0 procedure"
+set InitialPhase.MaxCores 12                          # 這一相用 12 核心計算
+
+phase InitialPhase                                    # 以 InitialPhase 為起點新增 → Phase_1
+set Phase_1.Identification "L01_主廠房頂拱中央導坑"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_6_1 Phase_1   # 在 Phase_1 停用導坑岩體
+set Phase_1.Deform.Loading.SumMstage 1.0              # 完全釋放（β 法可設 0.55 等）
+set Phase_1.MaxCores 12
+
+phase Phase_1                                         # 以 Phase_1 為起點 → Phase_2
+set Phase_2.Identification "L02_主廠房頂拱兩側擴挖"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_7_1 Phase_2
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_8_1 Phase_2
+set Phase_2.Deform.Loading.SumMstage 1.0
+set Phase_2.MaxCores 12
+…
+phase Phase_4                                         # L05：兩個洞同一相
+set Phase_5.Identification "L05_主廠房台階至EL901.6＋主變室頂拱中央導坑"
+deactivate Soil_1_Soil_2_Soil_3_Soil_4_Soil_11_1 Phase_5
+deactivate Soil_1_Soil_2_Soil_3_Soil_5_Soil_24_1 Phase_5</code></pre></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>指令</th><th>做什麼</th></tr>
+    <tr><td><code>phase 前一相</code></td><td>新增一個相位，以「前一相」的結果為起點；新相位依序命名 Phase_1、Phase_2…</td></tr>
+    <tr><td><code>deactivate 物件 相位</code></td><td>在該相位（及之後）停用物件＝開挖</td></tr>
+    <tr><td><code>activate 物件 相位</code></td><td>在該相位啟用物件＝施作支撐、加載重</td></tr>
+    <tr><td><code>set Phase_n.Deform.Loading.SumMstage</code></td><td>本相位結束時不平衡力釋放的比例（0～1）</td></tr>
+    <tr><td><code>set Phase_n.DeformCalcType</code></td><td>"K0 procedure"、"Gravity loading"、"Plastic"、"Safety"…</td></tr>
+    <tr><td><code>set Phase_n.MaxCores</code></td><td>平行計算用的核心數</td></tr>
+  </table></div>
+  <div class="callout link"><div class="ct">β 法：分兩相釋放</div><p>要模擬「開挖面前方岩體尚未完全釋放就施作支撐」，把一階拆成 a、b 兩相：a 相停用岩體、ΣMstage 0.55；b 相啟用岩栓與地錨、ΣMstage 1.0。ΣMstage 的意義見第 1 章。</p></div>
+</section>
+
+<section class="sec" id="s9" data-num="2.9" data-short="⑥ 迭代參數">
+  <div class="sec-head"><span class="sec-num">2.9</span><h2>⑥ 迭代參數</h2></div>
+  <p>大洞室無支撐開挖，塑性區發展快，預設參數常在早期就停下（0.5 m 網格在 L02 即 Error 101：Soil body seems to collapse）。這個模型從 L01 起全部相位改用放寬參數：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>Numerical control parameters</th><th>屬性名稱</th><th class="num">預設</th><th class="num">plan_e</th></tr>
+    <tr><td>Use default iter. parameters</td><td><code>UseDefaultIterationParams</code></td><td class="num">True</td><td class="num">False</td></tr>
+    <tr><td>Max steps</td><td><code>MaxSteps</code></td><td class="num">1000</td><td class="num">3000</td></tr>
+    <tr><td>Tolerated error</td><td><code>ToleratedError</code></td><td class="num">0.01</td><td class="num">0.001</td></tr>
+    <tr><td>Max unloading steps</td><td><code>MaxUnloadingSteps</code></td><td class="num">5</td><td class="num">20</td></tr>
+    <tr><td>Max load fraction per step</td><td><code>MaxLoadFractionPerStep</code></td><td class="num">0.5</td><td class="num">0.1</td></tr>
+    <tr><td>Arc-length control</td><td><code>ArcLengthControl</code></td><td class="num">"On"</td><td class="num">"Off"</td></tr>
+    <tr><td>Max iterations／Desired min／max</td><td><code>MaxIterations</code>…</td><td class="num">60／6／15</td><td class="num">不變</td></tr>
+  </table></div>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 6 節（每相一組，共 17 組）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 6. 迭代參數 ──
+set Phase_1.Deform.UseDefaultIterationParams False    # 先關掉「使用預設」，下面的設定才有效
+set Phase_1.Deform.ArcLengthControl "Off"             # 字串 "Off"；寫 False 會回 Invalid parameters
+set Phase_1.Deform.MaxSteps 3000
+set Phase_1.Deform.MaxUnloadingSteps 20
+set Phase_1.Deform.MaxLoadFractionPerStep 0.1
+set Phase_1.Deform.ToleratedError 0.001
+…（Phase_2 ～ Phase_17 相同）
+save</code></pre></div>
+  <p>每個參數在求解中扮演的角色（步長、arc-length、unloading 判斷崩塌）請見第 1 章；這裡只要記得：<b>關閉 arc-length 時，少數元素位移發散仍可能被判定收斂</b>，算完要檢查 |u| 異常大的節點（第 4 章）。</p>
+</section>
+
+<section class="sec" id="s10" data-num="2.10" data-short="⑦ 量測點與計算">
+  <div class="sec-head"><span class="sec-num">2.10</span><h2>⑦ 量測點（curve points）與計算</h2></div>
+  <p>Curve points 是「每一個計算步都要記錄」的點，用來畫荷載–位移曲線。必須在<b>計算之前</b>選好，而且選點是在 Output 裡做的，所以要換到 Output 的 Commands runner。</p>
+  <div class="steprow">
+    <div>
+      <ol class="gui-steps">
+        <li>Staged construction 按 <span class="gui">Select points for curves</span>，開出 Output。</li>
+        <li>Output 的 <span class="gui">Expert &gt; Run commands</span>，貼上第 7 節。</li>
+        <li><code>acp</code> 取離座標最近的節點；因為 2.6 已在那裡建了幾何點，取到的節點座標應與指令完全相同，仍要用眼睛核對清單。</li>
+        <li><code>update</code> 把選點帶回 Input，再按 Calculate。</li>
+        <li>算完先檢查 Ph0：σ′<sub>v</sub>＝γz、σ′<sub>h</sub>＝K0 σ′<sub>v</sub>，且沒有塑性點。</li>
+      </ol>
+    </div>
+    <figure class="shot" style="margin:0"><img src="assets/img/ch2/s13_1.png" alt="選到的節點" loading="lazy"><figcaption>Output 回報的 11 個節點：座標與指令一致，Data from 是交切後的土體名稱</figcaption></figure>
+  </div>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Command · 第 7–8 節（貼在 Output）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-plx"># ── 7. Curve points ──
+selectmeshpoints                                      # 進入選點模式
+acp "Node" 0 -288.3       # 01 PH_CROWN：主廠房拱頂
+acp "Node" 0 -263.3       # 02 PH_CROWN_REF：拱頂上方 25 m
+acp "Node" 0 -337.8       # 03 PH_FLOOR：主廠房底板中央
+acp "Node" 0 -362.8       # 04 PH_FLOOR_REF：底板下方 25 m
+acp "Node" -12.7 -316.6   # 05 PH_WALL_L
+acp "Node" 12.7 -316.6    # 06 PH_WALL_R
+…
+update                                                # 帶回 Input
+# ── 8. 回 Input 執行 ──
+calculate
+save</code></pre></div>
+  <figure class="shot"><img src="assets/img/ch2/s13_2.png" alt="Ph0 應力檢查" loading="lazy"><figcaption>Ph0 檢查：(a) 有效應力隨深度與 γz、K0γz 重合；(b) 應力比固定為 1.0、0.485、0.356，塑性點 0 個</figcaption></figure>
+</section>
+
+<section class="sec" id="s11" data-num="2.11" data-short="常見錯誤">
+  <div class="sec-head"><span class="sec-num">2.11</span><h2>常見錯誤與除錯</h2></div>
+  <ul class="pitfalls">
+    <li><b>Unknown object</b>物件名稱對不上。最常見的原因是專案裡原本就有物件、幾何指令順序被改過，或是用了 Structures 模式的名稱去設網格／相位。用 <code>echo</code> 或 Model explorer 確認目前的實際名稱。</li>
+    <li><b>Invalid parameters</b>型別不對。例如 <code>ArcLengthControl</code> 要寫字串 <code>"Off"</code>，不能寫 <code>False</code>；列舉值的字串要和 GUI 顯示的完全一樣（含空白與大小寫）。</li>
+    <li><b>一行指令被切斷</b>Commands runner 以換行分隔指令。從簡報或網頁複製長指令時，若中間被自動換行，後半段會變成一個不存在的指令。</li>
+    <li><b>Mesh output file not found</b>網格失敗，看 <code>%TEMP%\Plaxis2DXTemp\data.MeshInfo</code>；常見原因是懸空的結構物端點太多（&gt; 25）或幾何有極短的邊。</li>
+    <li><b>acp 在 Input 執行</b><code>acp</code>、<code>selectmeshpoints</code> 是 Output 的指令，在 Input 會停下，這是預期行為。</li>
+    <li><b>小數逗號</b>系統地區設定用逗號當小數點時，指令裡仍一律用「.」。</li>
+  </ul>
+  <div class="callout example"><div class="ct">建議的工作方式</div><p>txt 由 Python 腳本產生（數值集中在一個參數檔），GUI 只用來看結果與截圖。每次修改先在新專案分段貼上：第 1–3 節貼完看幾何、第 4 節貼完看網格，確定沒問題再貼相位與迭代參數。完整範例：<a href="files/KuanMing_plan_e7.txt">KuanMing_plan_e7.txt</a>。</p></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="ch1_principle.html"><span class="dir">← 上一頁</span>1 · Principle of Numerical Simulation</a><a class="next" href="ch3_data.html"><span class="dir">下一頁 →</span>3 · Data Structures</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 個人學習筆記</footer>
+
+<script src="assets/common.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>④ 材料 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c4" data-root="../" data-title="3 · ④ 材料">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ④ · 2 張表</div>
+  <h1>材料</h1>
+  <p class="lede"><b>材料清單與材料參數。</b><code>Material</code> 列出材料，<code>MaterialParameterData</code> 存每個材料的參數值（凝聚力、摩擦角…）。這個模型只有一種岩體材料 Rock_MC_e5（Mohr-Coulomb），其餘是它的副本。</p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>Rock_MC_e5 的 c、φ 存在哪裡？為什麼有 21 筆材料？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-Material">Material<small>21 筆</small></a><a href="#t-MaterialParameterData">MaterialParameterData<small>560 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-Material" data-num="4.1" data-short="Material" data-title="Material"><div class="sec-head"><span class="sec-num">4.1</span><h2>Material</h2></div><p class="src">材料清單：原始材料與各階段用的副本</p><div class="meta"><span>筆數 <b>21</b></span><span>欄位 <b>5</b></span></div>
+  <p>材料清單。21 筆裡真正不同的只有兩種：<b>Rock_MC_e5</b>（ID 1，原始材料）與 <b>NULL MATERIAL</b>（ID 3，邊界條件等不需要材料的物件用）。其餘 19 筆都是 Rock_MC_e5 的副本，ParentMaterialID = 1。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>Name</td><td>TEXT NOT NULL</td><td>材料名稱（PLAXIS 材料庫裡的名稱）</td></tr><tr><td>IdentificationGUID</td><td>TEXT NOT NULL</td><td>材料的唯一識別碼</td></tr><tr><td>I_ProjectID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>所屬專案 → <a href="../tables/c6.html#t-I_Project"><code>I_Project</code></a></td></tr><tr><td>ParentMaterialID<span class="fk">FK</span></td><td>INTEGER</td><td>如果是副本，指向原始材料；原始材料為 NULL → <a href="../tables/c4.html#t-Material"><code>Material</code></a></td></tr></table></div>
+  <div class="tablewrap"><table class="data sample"><tr><th>ID</th><th>Name</th><th>IdentificationGUID</th><th>I_ProjectID</th><th>ParentMaterialID</th></tr><tr><td class="num">1</td><td>Rock_MC_e5</td><td>{C173F63C-C055-4F10-A254-D3D93F92160E}</td><td class="num">1</td><td class="blob">NULL</td></tr><tr><td class="num">3</td><td>NULL MATERIAL</td><td>{00000000-0000-0000-0000-000000000000}</td><td class="num">1</td><td class="blob">NULL</td></tr><tr><td class="num">7</td><td>Rock_MC_e5</td><td>{A66C0F1B-2075-4FC4-AC1F-07D8F57A2138}</td><td class="num">1</td><td class="num">1</td></tr><tr><td class="num">8</td><td>Rock_MC_e5</td><td>{9154E72C-AE29-4176-82AC-95FDD3869A61}</td><td class="num">1</td><td class="num">1</td></tr><tr><td class="num">9</td><td>Rock_MC_e5</td><td>{FC8A22D9-A00A-4FF4-92EB-CD11729FC384}</td><td class="num">1</td><td class="num">1</td></tr><tr><td class="num">10</td><td>Rock_MC_e5</td><td>{2E7043C6-E116-46C9-892D-B3C62814F9D2}</td><td class="num">1</td><td class="num">1</td></tr></table></div>
+  <h3>副本是給各施工階段用的</h3>
+  <p>岩體區塊在每個階段使用哪個材料，記在 <a href="../tables/c5.html#t-StagedUserFeaturePhasesState"><code>StagedUserFeaturePhasesState</code></a> 的 MaterialID。PLAXIS 為不同階段建立材料副本：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT p.Number AS 階段, p.Name AS 名稱,
+       GROUP_CONCAT(DISTINCT s.MaterialID) AS 岩體區塊用的MaterialID
+FROM StagedUserFeaturePhasesState s
+JOIN StagedUserFeature f ON f.ID = s.StagedUserFeatureID
+JOIN I_Phase p           ON p.ID = s.I_PhaseID
+WHERE f.StructureTypeID = 1 AND p.PhaseTypeID = 1
+GROUP BY p.ID ORDER BY p.Number;</code></pre></div><div class="subhead">查詢結果（18 列）</div><div class="tablewrap"><table class="data sample"><tr><th>階段</th><th>名稱</th><th>岩體區塊用的MaterialID</th></tr><tr><td class="num">0</td><td>Ph0_地應力平衡 [InitialPhase]</td><td>8</td></tr><tr><td class="num">1</td><td>L01_主廠房頂拱中央導坑 [Phase_1]</td><td>9</td></tr><tr><td class="num">2</td><td>L02_主廠房頂拱兩側擴挖 [Phase_2]</td><td>10</td></tr><tr><td class="num">3</td><td>L03_主廠房台階至EL906.6 [Phase_3]</td><td>11</td></tr><tr><td class="num">4</td><td>L04_主廠房台階至EL904.1 [Phase_4]</td><td>12</td></tr><tr><td class="num">5</td><td>L05_主廠房台階至EL901.6＋主變室頂拱中央導坑 [Phase_5]</td><td>13</td></tr><tr><td class="num">6</td><td>L06_主廠房台階至EL899.1 [Phase_6]</td><td>14</td></tr><tr><td class="num">7</td><td>L07_主廠房台階至EL896.0 [Phase_7]</td><td>15</td></tr><tr><td class="num">8</td><td>L08_主廠房台階至EL893.5 [Phase_8]</td><td>16</td></tr><tr><td class="num">9</td><td>L09_主廠房台階至EL891.0 [Phase_9]</td><td>17</td></tr><tr><td class="num">10</td><td>L10_主廠房台階至EL888.0 [Phase_10]</td><td>18</td></tr><tr><td class="num">11</td><td>L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖 [Phase_11]</td><td>19</td></tr><tr><td class="num">12</td><td>L12_主廠房台階至EL881.9＋主變室台階至EL896.0 [Phase_12]</td><td>20</td></tr><tr><td class="num">13</td><td>L13_主廠房台階至EL878.9＋主變室台階至EL893.5 [Phase_13]</td><td>21</td></tr><tr><td class="num">14</td><td>L14_主廠房台階至EL875.8＋主變室台階至EL891.0 [Phase_14]</td><td>22</td></tr><tr><td class="num">15</td><td>L15_主廠房台階至EL872.3＋主變室台階至EL888.5 [Phase_15]</td><td>24</td></tr><tr><td class="num">16</td><td>L16_主廠房台階至EL869.2＋主變室台階至EL885.9 [Phase_16]</td><td>26</td></tr><tr><td class="num">17</td><td>L17_主廠房台階至EL865.2＋主變室台階至EL883.4 [Phase_17]</td><td>27</td></tr></table></div>
+  <h3>Python：確認副本的參數和原件一樣</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">base = dict(con.execute('SELECT MaterialParameterID, Data FROM MaterialParameterData WHERE MaterialID = 1'))
+copies = [m for (m,) in con.execute('SELECT ID FROM Material WHERE ParentMaterialID = 1')]
+diff = []
+for m in copies:
+    d = dict(con.execute('SELECT MaterialParameterID, Data FROM MaterialParameterData WHERE MaterialID = ?', (m,)))
+    if d != base:
+        diff.append(m)
+print('Rock_MC_e5 副本', len(copies), '個；參數和原件不同的副本：', diff or '沒有')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>Rock_MC_e5 副本 19 個；參數和原件不同的副本： 沒有</code></pre></div>
+</section><section class="sec" id="t-MaterialParameterData" data-num="4.2" data-short="MaterialParameterData" data-title="MaterialParameterData"><div class="sec-head"><span class="sec-num">4.2</span><h2>MaterialParameterData</h2></div><p class="src">材料參數值：c、sinφ、孔隙比、材料模型旗標</p><div class="meta"><span>筆數 <b>560</b></span><span>欄位 <b>5</b></span></div>
+  <p>每個材料一列一個參數，每個材料 28 列。內容是計算核心需要的一組參數：材料模型的旗標（Is HoekBrown…）、凝聚力、摩擦角的 sin 值、初始孔隙比…</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>MaterialID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個材料 → <a href="../tables/c4.html#t-Material"><code>Material</code></a></td></tr><tr><td>MaterialParameterID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個參數 → <a href="../tables/c7.html#t-MaterialParameter"><code>MaterialParameter</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>數值格式（Double、Boolean、UnsignedInt64…） → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB</td><td>參數值（二進位）</td></tr></table></div>
+  <h3>Python：讀出 Rock_MC_e5 的參數</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">import math
+rows = con.execute('''SELECT p.Description, d.DataInterpretationID, d.Data
+                      FROM MaterialParameterData d JOIN MaterialParameter p ON p.ID = d.MaterialParameterID
+                      WHERE d.MaterialID = 1 ORDER BY d.ID''').fetchall()
+for name, di, data in rows:
+    v = decode(data, di)[0]
+    if name.startswith('Is ') and v == 0:     # 沒用到的材料模型旗標略過
+        continue
+    print(f'{name:30s} {v}')
+
+sinphi = dict((n, decode(d, di)[0]) for n, di, d in rows)['SinPhi Friction Angle']
+print(f'→ 摩擦角 φ = asin({sinphi:.4f}) = {math.degrees(math.asin(sinphi)):.1f}°')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>Material Index                 1
+Initial Void Ratio             0.49999999999999994
+Slope of Critical State Line   0.0
+SinPhi Friction Angle          0.6266038113644604
+Cohesion Reference             1351.0
+Cohesion Increment             0.0
+Cohesion Vertical Reference    0.0
+RInter                         1.0
+SigmaCi                        0.0
+Mi                             0.0
+GSI                            0.0
+Disturbance                    0.0
+K0_nc                          0.0
+L Spacing                      0.0
+→ 摩擦角 φ = asin(0.6266) = 38.8°</code></pre></div>
+  <div class="callout pitfall"><div class="ct">E、ν、γ 不在這張表</div><p>這張表沒有楊氏模數、柏松比、單位重。楊氏模數以計算結果的形式存在 Result（變數 Young&#39;s Modulus，積分點），例如區塊 336 在 L01 是 15,000,000 kPa = 15 GPa。要完整的材料參數，請以 PLAXIS Input 的材料視窗或專案的建模腳本為準。</p></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../tables/c3.html"><span class="dir">← 上一頁</span>3 · ③ 網格</a><a class="next" href="../tables/c5.html"><span class="dir">下一頁 →</span>3 · ⑤ 模型物件</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>

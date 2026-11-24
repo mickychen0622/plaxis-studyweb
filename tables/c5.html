@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>⑤ 模型物件 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c5" data-root="../" data-title="3 · ⑤ 模型物件">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ⑤ · 5 張表</div>
+  <h1>模型物件</h1>
+  <p class="lede"><b>模型物件＝PLAXIS 裡可以「在某個階段開或關」的東西。</b>岩體區塊、邊界條件、固定條件都是 StagedUserFeature。這一類記錄它們是什麼、每個階段開或關、用哪個材料、各階段的參數，以及積分點座標。<b>開挖順序就藏在這裡。</b></p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>每個施工階段挖掉了哪些岩體區塊？積分點的座標在哪裡？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-StagedUserFeature">StagedUserFeature<small>595 筆</small></a><a href="#t-StagedUserFeaturePhasesState">StagedUserFeaturePhasesState<small>10,705 筆</small></a><a href="#t-StagedUserFeaturePhaseParameterData">StagedUserFeaturePhaseParameterData<small>46,045 筆</small></a><a href="#t-StagedUserFeatureGlobalParameterData">StagedUserFeatureGlobalParameterData<small>64 筆</small></a><a href="#t-StagedUserFeatureRelation">StagedUserFeatureRelation<small>0 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-StagedUserFeature" data-num="5.1" data-short="StagedUserFeature" data-title="StagedUserFeature"><div class="sec-head"><span class="sec-num">5.1</span><h2>StagedUserFeature</h2></div><p class="src">模型物件清單：岩體區塊、邊界條件，以及它們對應的網格區塊</p><div class="meta"><span>筆數 <b>595</b></span><span>欄位 <b>5</b></span></div>
+  <p>模型中每一個「可分階段啟用」的物件。它把 PLAXIS 裡看到的物件（岩體多邊形、邊界條件）對應到 <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a> 的網格區塊。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>Name</td><td>TEXT NOT NULL</td><td>物件名稱，例如 Soil_1_…（岩體區塊）、GWFlowBaseBC_…（地下水邊界）</td></tr><tr><td>IdentificationGUID</td><td>TEXT NOT NULL</td><td>唯一識別碼</td></tr><tr><td>MeshEntityID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>這個物件對應的網格區塊 → <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a></td></tr><tr><td>StructureTypeID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>物件種類：Soil、Fixity、Viscous Boundary… → <a href="../tables/c7.html#t-StructureType"><code>StructureType</code></a></td></tr></table></div>
+  <h3>這個模型有哪些物件</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT t.Description AS 物件種類, COUNT(*) AS 個數, MIN(f.Name) AS 名稱例子
+FROM StagedUserFeature f JOIN StructureType t ON t.ID = f.StructureTypeID
+GROUP BY t.ID ORDER BY 2 DESC;</code></pre></div><div class="subhead">查詢結果（6 列）</div><div class="tablewrap"><table class="data sample"><tr><th>物件種類</th><th>個數</th><th>名稱例子</th></tr><tr><td>External Water Load Boundary</td><td class="num">354</td><td>external_water_boundary_157</td></tr><tr><td>Ground Water Flow Boundary</td><td class="num">179</td><td>GWFlowBaseBC_1</td></tr><tr><td>Soil</td><td class="num">32</td><td>Soil_1_1</td></tr><tr><td>Fixity</td><td class="num">25</td><td>Fixity_547</td></tr><tr><td>Viscous Boundary</td><td class="num">4</td><td>ViscousBoundary_0</td></tr><tr><td>Soil Model Contour</td><td class="num">1</td><td>Soil Model Contour</td></tr></table></div>
+  <p>只有岩體（Soil）與各種邊界條件，<b>沒有 Plate、Anchor、Embedded Beam 等結構元素</b>。也就是說，這個 e5 模型沒有用結構元素模擬支撐。</p>
+  <h3>岩體區塊與網格區塊的對應</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT f.ID, f.Name, f.MeshEntityID, m.ComponentCount AS 元素數
+FROM StagedUserFeature f JOIN MeshEntity m ON m.ID = f.MeshEntityID
+WHERE f.StructureTypeID = 1
+ORDER BY f.ID LIMIT 8;</code></pre></div><div class="subhead">查詢結果（8 列）</div><div class="tablewrap"><table class="data sample"><tr><th>ID</th><th>Name</th><th>MeshEntityID</th><th>元素數</th></tr><tr><td class="num">1</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_6_1</td><td class="num">335</td><td class="num">401</td></tr><tr><td class="num">2</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_8_1</td><td class="num">336</td><td class="num">316</td></tr><tr><td class="num">3</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_7_1</td><td class="num">337</td><td class="num">318</td></tr><tr><td class="num">4</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_9_1</td><td class="num">338</td><td class="num">592</td></tr><tr><td class="num">5</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_10_1</td><td class="num">339</td><td class="num">514</td></tr><tr><td class="num">6</td><td>Soil_1_Soil_2_Soil_3_Soil_4_Soil_11_1</td><td class="num">340</td><td class="num">514</td></tr><tr><td class="num">7</td><td>Soil_1_Soil_2_Soil_3_Soil_5_Soil_24_1</td><td class="num">341</td><td class="num">264</td></tr><tr><td class="num">8</td><td>Soil_1_Soil_2_Soil_3_Soil_5_Soil_26_1</td><td class="num">342</td><td class="num">122</td></tr></table></div>
+</section><section class="sec" id="t-StagedUserFeaturePhasesState" data-num="5.2" data-short="StagedUserFeaturePhasesState" data-title="StagedUserFeaturePhasesState"><div class="sec-head"><span class="sec-num">5.2</span><h2>StagedUserFeaturePhasesState</h2></div><p class="src">每個物件在每個階段開或關、用哪個材料：開挖順序就在這裡</p><div class="meta"><span>筆數 <b>10,705</b></span><span>欄位 <b>5</b></span></div>
+  <p>「物件 × 階段」的狀態表：每個物件在每個階段是開是關、用哪個材料。對應 PLAXIS Staged construction 畫面裡把區塊切成灰色（關閉）的操作。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號；下一張表用它指回來</td></tr><tr><td>IsEnabled</td><td>BOOLEAN NOT NULL</td><td>1 = 這個階段啟用；0 = 關閉（岩體區塊就是被挖除）</td></tr><tr><td>StagedUserFeatureID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個物件 → <a href="../tables/c5.html#t-StagedUserFeature"><code>StagedUserFeature</code></a></td></tr><tr><td>MaterialID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>這個階段用的材料 → <a href="../tables/c4.html#t-Material"><code>Material</code></a></td></tr><tr><td>I_PhaseID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個階段 → <a href="../tables/c2.html#t-I_Phase"><code>I_Phase</code></a></td></tr></table></div>
+  <h3>每個階段還剩幾個岩體區塊</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT p.Number AS 階段, p.Name AS 名稱,
+       SUM(s.IsEnabled) AS 啟用的岩體區塊, COUNT(*) - SUM(s.IsEnabled) AS 已挖除
+FROM StagedUserFeaturePhasesState s
+JOIN StagedUserFeature f ON f.ID = s.StagedUserFeatureID
+JOIN I_Phase p           ON p.ID = s.I_PhaseID
+WHERE f.StructureTypeID = 1 AND p.PhaseTypeID = 1
+GROUP BY p.ID ORDER BY p.Number;</code></pre></div><div class="subhead">查詢結果（18 列）</div><div class="tablewrap"><table class="data sample"><tr><th>階段</th><th>名稱</th><th>啟用的岩體區塊</th><th>已挖除</th></tr><tr><td class="num">0</td><td>Ph0_地應力平衡 [InitialPhase]</td><td class="num">32</td><td class="num">0</td></tr><tr><td class="num">1</td><td>L01_主廠房頂拱中央導坑 [Phase_1]</td><td class="num">31</td><td class="num">1</td></tr><tr><td class="num">2</td><td>L02_主廠房頂拱兩側擴挖 [Phase_2]</td><td class="num">29</td><td class="num">3</td></tr><tr><td class="num">3</td><td>L03_主廠房台階至EL906.6 [Phase_3]</td><td class="num">28</td><td class="num">4</td></tr><tr><td class="num">4</td><td>L04_主廠房台階至EL904.1 [Phase_4]</td><td class="num">27</td><td class="num">5</td></tr><tr><td class="num">5</td><td>L05_主廠房台階至EL901.6＋主變室頂拱中央導坑 [Phase_5]</td><td class="num">25</td><td class="num">7</td></tr><tr><td class="num">6</td><td>L06_主廠房台階至EL899.1 [Phase_6]</td><td class="num">24</td><td class="num">8</td></tr><tr><td class="num">7</td><td>L07_主廠房台階至EL896.0 [Phase_7]</td><td class="num">23</td><td class="num">9</td></tr><tr><td class="num">8</td><td>L08_主廠房台階至EL893.5 [Phase_8]</td><td class="num">22</td><td class="num">10</td></tr><tr><td class="num">9</td><td>L09_主廠房台階至EL891.0 [Phase_9]</td><td class="num">21</td><td class="num">11</td></tr><tr><td class="num">10</td><td>L10_主廠房台階至EL888.0 [Phase_10]</td><td class="num">20</td><td class="num">12</td></tr><tr><td class="num">11</td><td>L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖 [Phase_11]</td><td class="num">17</td><td class="num">15</td></tr><tr><td class="num">12</td><td>L12_主廠房台階至EL881.9＋主變室台階至EL896.0 [Phase_12]</td><td class="num">15</td><td class="num">17</td></tr><tr><td class="num">13</td><td>L13_主廠房台階至EL878.9＋主變室台階至EL893.5 [Phase_13]</td><td class="num">13</td><td class="num">19</td></tr><tr><td class="num">14</td><td>L14_主廠房台階至EL875.8＋主變室台階至EL891.0 [Phase_14]</td><td class="num">11</td><td class="num">21</td></tr><tr><td class="num">15</td><td>L15_主廠房台階至EL872.3＋主變室台階至EL888.5 [Phase_15]</td><td class="num">9</td><td class="num">23</td></tr><tr><td class="num">16</td><td>L16_主廠房台階至EL869.2＋主變室台階至EL885.9 [Phase_16]</td><td class="num">7</td><td class="num">25</td></tr><tr><td class="num">17</td><td>L17_主廠房台階至EL865.2＋主變室台階至EL883.4 [Phase_17]</td><td class="num">5</td><td class="num">27</td></tr></table></div>
+  <h3>Python：找出開挖順序並畫圖</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+phases = con.execute('SELECT ID, Number FROM I_Phase WHERE PhaseTypeID = 1 ORDER BY Number').fetchall()
+removed = {}                                   # 網格區塊 ID → 在第幾階段被挖除
+for pid, num in phases:
+    for (ent,) in con.execute('''SELECT f.MeshEntityID FROM StagedUserFeaturePhasesState s
+                                 JOIN StagedUserFeature f ON f.ID = s.StagedUserFeatureID
+                                 WHERE s.I_PhaseID = ? AND f.StructureTypeID = 1 AND s.IsEnabled = 0''', (pid,)):
+        removed.setdefault(ent, num)           # 只記第一次被關掉的階段
+for num in sorted(set(removed.values())):
+    print(f'L{num:02d} 挖除的網格區塊：', sorted(e for e, n in removed.items() if n == num))
+
+xy = node_xy()
+tris, vals = [], []
+for e, num in removed.items():
+    t = connectivity(e)[:, :3] - 1
+    tris.append(t)
+    vals.append(np.full(len(t), num))
+tris, vals = np.vstack(tris), np.concatenate(vals)
+
+fig, ax = plt.subplots(figsize=(10, 6.5))
+tc = ax.tripcolor(xy[:, 0], xy[:, 1], tris, facecolors=vals, cmap='viridis', vmin=1, vmax=17)
+for e, num in removed.items():
+    c = xy[connectivity(e)[:, :3] - 1].reshape(-1, 2).mean(axis=0)
+    ax.text(c[0], c[1], f'L{num:02d}', ha='center', va='center', fontsize=7,
+            bbox=dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.7))
+fig.colorbar(tc, ax=ax, label='Excavated in phase')
+ax.set_xlim(-18, 66); ax.set_ylim(-342, -284)          # 只看洞室範圍
+ax.set_aspect('equal'); ax.set_xlabel('x (m)'); ax.set_ylabel('y (m)')
+ax.set_title('Excavation sequence')
+fig.savefig('excavation.png', dpi=150, bbox_inches='tight')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>L01 挖除的網格區塊： [335]
+L02 挖除的網格區塊： [336, 337]
+L03 挖除的網格區塊： [338]
+L04 挖除的網格區塊： [339]
+L05 挖除的網格區塊： [340, 341]
+L06 挖除的網格區塊： [344]
+L07 挖除的網格區塊： [346]
+L08 挖除的網格區塊： [347]
+L09 挖除的網格區塊： [350]
+L10 挖除的網格區塊： [356]
+L11 挖除的網格區塊： [342, 343, 358]
+L12 挖除的網格區塊： [345, 361]
+L13 挖除的網格區塊： [348, 362]
+L14 挖除的網格區塊： [351, 363]
+L15 挖除的網格區塊： [355, 364]
+L16 挖除的網格區塊： [357, 365]
+L17 挖除的網格區塊： [359, 366]</code></pre></div>
+  <figure class="shot"><img src="../assets/img/excavation.png" alt="上面程式產生的圖：每個岩體區塊在哪個階段被挖除（左側主廠房、右側主變室）" loading="lazy"><figcaption>上面程式產生的圖：每個岩體區塊在哪個階段被挖除（左側主廠房、右側主變室）</figcaption></figure>
+</section><section class="sec" id="t-StagedUserFeaturePhaseParameterData" data-num="5.3" data-short="StagedUserFeaturePhaseParameterData" data-title="StagedUserFeaturePhaseParameterData"><div class="sec-head"><span class="sec-num">5.3</span><h2>StagedUserFeaturePhaseParameterData</h2></div><p class="src">物件在各階段的參數：水壓條件、水頭、應力釋放…</p><div class="meta"><span>筆數 <b>46,045</b></span><span>欄位 <b>9</b></span></div>
+  <p>物件在某個階段的參數：水壓條件、水頭、應力釋放（Deconfinement）、是否套用強度折減…。它不直接記錄階段，而是透過 StagedUserFeaturePhasesStateID 指到「物件 × 階段」那一列。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>ComponentSize</td><td>INTEGER NOT NULL</td><td>分量數</td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>由哪個程式寫入 → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>StagedUserFeaturePhasesStateID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個「物件 × 階段」 → <a href="../tables/c5.html#t-StagedUserFeaturePhasesState"><code>StagedUserFeaturePhasesState</code></a></td></tr><tr><td>StagedUserFeatureParameterID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個參數 → <a href="../tables/c7.html#t-StagedUserFeatureParameter"><code>StagedUserFeatureParameter</code></a></td></tr><tr><td>DataLayoutID<span class="fk">FK</span></td><td>INTEGER</td><td>數值排在哪裡（可為 NULL） → <a href="../tables/c7.html#t-DataLayout"><code>DataLayout</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER</td><td>數值格式；<code>StagedUserFeatureParameterTableId</code> 表示值是 StagedUserFeatureParameter 的 ID → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>ParentParameterDataID<span class="fk">FK</span></td><td>INTEGER</td><td>指向同表另一列，用來分組 → <a href="../tables/c5.html#t-StagedUserFeaturePhaseParameterData"><code>StagedUserFeaturePhaseParameterData</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB</td><td>參數值（二進位）</td></tr></table></div>
+  <h3>Python：讀區塊 336 在 L01 的參數</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">ent = 336
+pid = con.execute('SELECT ID FROM I_Phase WHERE Number = 1 AND PhaseTypeID = 1').fetchone()[0]
+names = dict(con.execute('SELECT ID, Description FROM StagedUserFeatureParameter'))
+rows = con.execute('''SELECT d.StagedUserFeatureParameterID, d.DataInterpretationID, d.ComponentSize, d.Data
+                      FROM StagedUserFeaturePhaseParameterData d
+                      JOIN StagedUserFeaturePhasesState s ON s.ID = d.StagedUserFeaturePhasesStateID
+                      JOIN StagedUserFeature f            ON f.ID = s.StagedUserFeatureID
+                      WHERE f.MeshEntityID = ? AND s.I_PhaseID = ?''', (ent, pid)).fetchall()
+for ppid, di, cs, data in rows:
+    v = decode(data, di, cs)
+    if v is None:
+        shown = '（群組，無值）'
+    elif di == 16:                                  # StagedUserFeatureParameterTableId → 選項名稱
+        shown = names[int(v.ravel()[0])]
+    elif v.size &gt; 6:
+        shown = f'{v.size} 個值，例如 {np.round(v.ravel()[:3], 2).tolist()}'
+    else:
+        shown = np.round(v.ravel(), 4).tolist()
+    print(f'{names[ppid]:28s} {shown}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>Volumetric Strain            [0.0, 0.0, 0.0]
+Use Global Field Stress      [1]
+Field Stress                 [0.0, 0.0, 0.0]
+Field Stress Axes            9 個值，例如 [0.0, 1.0, 0.0]
+Apply Strength Reduction     [0]
+HeatFluxFunction             [-1]
+HeatFlux Function Signal     Constant Signal
+Head                         4740 個值，例如 [-647.8, -647.8, -647.8]
+Head                         3792 個值，例如 [-647.8, -647.8, -647.8]
+Has Preconsolidation         [1]
+Water Condition              Global Water Level
+Pore Pressure                4740 個值，例如 [3540.0, 3540.0, 3545.19]
+Pore Pressure                3792 個值，例如 [3544.54, 3540.33, 3540.33]
+Temperature Condition Type   Inactive Condition
+Energy Condition Type        Inactive Condition
+Deconfinement                [-1.0]</code></pre></div>
+  <p>Head = −647.8 m 就是 <a href="../tables/c1.html#t-Result"><code>Result</code></a> 提到的地下水位設定；Deconfinement = −1 表示沒有使用應力釋放（β 法）。</p>
+</section><section class="sec" id="t-StagedUserFeatureGlobalParameterData" data-num="5.4" data-short="StagedUserFeatureGlobalParameterData" data-title="StagedUserFeatureGlobalParameterData"><div class="sec-head"><span class="sec-num">5.4</span><h2>StagedUserFeatureGlobalParameterData</h2></div><p class="src">不分階段的物件參數；本檔是岩體區塊的積分點座標（StressPoints）</p><div class="meta"><span>筆數 <b>64</b></span><span>欄位 <b>9</b></span></div>
+  <p>和上一張表一樣存物件參數，但<b>不分階段</b>。本檔 64 列全部是 32 個岩體區塊的 <b>StressPoints</b>（應力點，即積分點），每個區塊兩列：</p>
+  <ul>
+    <li>ComponentSize 2：每個積分點的 (x, y)，共「元素數 × 12」點，順序和 Result 裡 Integration Point 的資料一致。</li>
+    <li>ComponentSize 1：每個元素一個值，數值等於元素面積的 2 倍（即三角形座標轉換的 Jacobian 行列式）。</li>
+  </ul>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>ComponentSize</td><td>INTEGER NOT NULL</td><td>分量數：座標為 2（x, y），元素值為 1</td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>由哪個程式寫入 → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>StagedUserFeatureID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個物件 → <a href="../tables/c5.html#t-StagedUserFeature"><code>StagedUserFeature</code></a></td></tr><tr><td>StagedUserFeatureParameterID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個參數；本檔全部是 StressPoints → <a href="../tables/c7.html#t-StagedUserFeatureParameter"><code>StagedUserFeatureParameter</code></a></td></tr><tr><td>DataLayoutID<span class="fk">FK</span></td><td>INTEGER</td><td>數值排在哪裡 → <a href="../tables/c7.html#t-DataLayout"><code>DataLayout</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER</td><td>數值格式 → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>ParentParameterDataID<span class="fk">FK</span></td><td>INTEGER</td><td>分組用 → <a href="../tables/c5.html#t-StagedUserFeatureGlobalParameterData"><code>StagedUserFeatureGlobalParameterData</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB</td><td>數值（二進位）</td></tr></table></div>
+  <h3>Python：取出積分點座標並驗證</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">ent = 336
+suf = con.execute('SELECT ID FROM StagedUserFeature WHERE MeshEntityID = ?', (ent,)).fetchone()[0]
+rows = con.execute('''SELECT ComponentSize, DataLayoutID, DataInterpretationID, Data
+                      FROM StagedUserFeatureGlobalParameterData WHERE StagedUserFeatureID = ?''', (suf,)).fetchall()
+arr = {cs: decode(data, di, cs) for cs, dl, di, data in rows}
+pts, w = arr[2], arr[1]
+conn = connectivity(ent)
+print('元素', len(conn), '個；積分點座標', pts.shape, '；每元素值', w.shape)
+
+# 每元素值 ÷ 元素面積
+xy = node_xy()
+a, b, c = (xy[conn[:, i] - 1] for i in range(3))
+area = 0.5 * np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1]))
+print('每元素值 / 元素面積：最小', (w / area).min().round(6), '最大', (w / area).max().round(6))
+
+# 第 1 個元素的 12 個積分點都落在第 1 個元素裡（用重心座標檢查）
+T = np.array([[a[0, 0] - c[0, 0], b[0, 0] - c[0, 0]], [a[0, 1] - c[0, 1], b[0, 1] - c[0, 1]]])
+lam = np.linalg.solve(T, (pts[:12] - c[0]).T)
+print('第 1 個元素的 12 個積分點都在元素內：', bool(np.all(lam &gt; 0) and np.all(lam.sum(0) &lt; 1)))</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>元素 316 個；積分點座標 (3792, 2) ；每元素值 (316,)
+每元素值 / 元素面積：最小 2.0 最大 2.0
+第 1 個元素的 12 個積分點都在元素內： True</code></pre></div>
+  <div class="callout link"><div class="ct">用途</div><p>想把應力畫成雲圖或沿某條線取值，就需要積分點座標。搭配方式見 <a href="../tables/c1.html#t-Result"><code>Result</code></a> 的「讀積分點應力」範例。</p></div>
+</section><section class="sec" id="t-StagedUserFeatureRelation" data-num="5.5" data-short="StagedUserFeatureRelation" data-title="StagedUserFeatureRelation"><div class="sec-head"><span class="sec-num">5.5</span><h2>StagedUserFeatureRelation</h2></div><p class="src">物件之間的關係（剛體從屬）；本檔為空</p><div class="meta"><span>筆數 <b>0</b></span><span>欄位 <b>5</b></span></div>
+  <p>物件之間在某個階段的關係，例如把一群物件設成剛體（Rigid body）時，記錄「誰是誰的從屬」。<b>這個模型沒有使用剛體，所以是空表。</b>其他有剛體的專案才會有資料。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>I_PhaseID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個階段 → <a href="../tables/c2.html#t-I_Phase"><code>I_Phase</code></a></td></tr><tr><td>SourceStagedUserFeatureID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>來源物件 → <a href="../tables/c5.html#t-StagedUserFeature"><code>StagedUserFeature</code></a></td></tr><tr><td>TargetStagedUserFeatureID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>目標物件 → <a href="../tables/c5.html#t-StagedUserFeature"><code>StagedUserFeature</code></a></td></tr><tr><td>StagedUserFeatureRelationTypeID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>關係種類；只有 Rigid Slave Of（剛體從屬） → <a href="../tables/c7.html#t-StagedUserFeatureRelationType"><code>StagedUserFeatureRelationType</code></a></td></tr></table></div>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT COUNT(*) AS 筆數 FROM StagedUserFeatureRelation;</code></pre></div><div class="subhead">查詢結果（1 列）</div><div class="tablewrap"><table class="data sample"><tr><th>筆數</th></tr><tr><td class="num">0</td></tr></table></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../tables/c4.html"><span class="dir">← 上一頁</span>3 · ④ 材料</a><a class="next" href="../tables/c6.html"><span class="dir">下一頁 →</span>3 · ⑥ 專案資訊</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>

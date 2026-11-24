@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mohr-Coulomb · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+/* 示意圖用的線型（顏色走 CSS 變數，深淺色皆可讀） */
+svg .ln { stroke: var(--ink); fill: none; stroke-width: 1.4; }
+svg .ln2 { stroke: var(--ink); fill: none; stroke-width: 1; }
+svg .thin { stroke: var(--gray); fill: none; stroke-width: 1; stroke-dasharray: 4 3; }
+svg .ac { stroke: var(--blue); fill: none; stroke-width: 2; }
+svg .rd { stroke: var(--red); fill: none; stroke-width: 2; }
+svg .acf { fill: var(--blue); } svg .rdf { fill: var(--red); } svg .inkf { fill: var(--ink); }
+svg text { fill: var(--ink); font-size: 13px; }
+svg text.s { fill: var(--muted); font-size: 12px; }
+svg text.blue { fill: var(--blue); } svg text.red { fill: var(--red); }
+.ptag { display: inline-block; white-space: nowrap; font-size: 12px; padding: 0 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); margin-left: 4px; vertical-align: 1px; }
+.ptag.req { border-color: var(--red); color: var(--red); }
+.ptag.opt { border-color: var(--blue); color: var(--blue); }
+.muted { color: var(--muted); }
+.shot.win { max-width: 520px; }
+figure.shot.small img { max-height: 340px; }
+.wintab { display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.wintab figure.shot { margin: 0; }
+@media (max-width: 900px) { .wintab { grid-template-columns: 1fr; } }
+td.v { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; }
+
+/* ---------- 元素試驗室 ---------- */
+.lab .presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+.lab .presets .btn { font-size: 13.5px; }
+.lab .pgroup { margin: 0 0 6px; }
+.lab .pgroup > .gt { font-size: 12.5px; font-weight: 600; color: var(--orange); letter-spacing: .02em; margin: 14px 0 8px; }
+.lab .controls { gap: 10px 26px; }
+.lab .hidden { display: none !important; }
+.lab .runbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 6px; }
+.lab .runbar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.lab .runbar .pos { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 9em; text-align: right; }
+.lab .ghostlbl { font-size: 13px; color: var(--muted); }
+.lab .plots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 22px; margin-top: 10px; }
+.lab .plots .span2 { grid-column: span 2; }
+@media (max-width: 1100px) { .lab .plots { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lab .plots .span2 { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .lab .plots { grid-template-columns: 1fr; } .lab .plots .span2 { grid-column: auto; } }
+.lab .plots figure { margin: 0; }
+.lab .plots figcaption { font-size: 13px; font-weight: 600; color: var(--ink); margin: 10px 0 2px; }
+.lab .plots figcaption small { font-weight: 400; color: var(--muted); }
+.lab .stats .stat .v { font-size: 19px; }
+.lab .state { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: 700; font-size: 13.5px; }
+.state.el { background: var(--accent-soft); color: var(--accent); }
+.state.pl { background: var(--warn-soft); color: var(--red); }
+.state.tc { background: var(--orange-soft); color: var(--orange); }
+.lab .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+.lab .legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: 4px; margin-right: 6px; }
+.ctrl.rn { grid-template-columns: 3.4em 1fr 6.6em; }
+.ctrl.rn input[type=number] { grid-column: auto; padding: 5px 8px; }
+.mohrcalc { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.mohrcalc .controls { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .mohrcalc { grid-template-columns: 1fr; } }
+.readout td:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+</style>
+</head>
+<body data-page="ch5" data-root="" data-title="5 · Mohr-Coulomb">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 5</div>
+  <h1>Material Model – Mohr-Coulomb</h1>
+  <p class="lede"><b>Mohr-Coulomb 是線彈性–完全塑性模型：降伏前是 Hooke 定律，碰到六角錐形的破壞面後應力停住、應變一直長。</b>這一章從降伏面、流動法則、PLAXIS 的回傳計算一路講到材料視窗怎麼填，並用互動元素試驗看 ψ、排水條件與張力截斷的作用。</p>
+  <div class="callout question"><div class="ct">這一章要回答</div><p>E、ν、c、φ、ψ、σt 這六個數字，在 PLAXIS 裡各自決定了什麼？為什麼 MC 適合算破壞、不適合算變形與液化？</p></div>
+</header>
+
+<!-- ============ 5.1 ============ -->
+<section class="sec" id="s1" data-num="5.1" data-short="線彈性–完全塑性">
+  <div class="sec-head"><span class="sec-num">5.1</span><h2>線彈性–完全塑性</h2></div>
+  <div class="grid2">
+    <figure class="diagram">
+      <svg viewBox="0 0 340 225" role="img" aria-label="彈性完全塑性的應力應變曲線">
+        <line x1="40" y1="185" x2="320" y2="185" class="ln"/><line x1="40" y1="185" x2="40" y2="20" class="ln"/>
+        <text x="300" y="205" class="s">ε</text><text x="18" y="28" class="s">σ′</text>
+        <polyline points="40,185 120,70 300,70" class="ac"/>
+        <line x1="40" y1="70" x2="120" y2="70" class="thin"/><text x="14" y="74" class="s">σy</text>
+        <line x1="230" y1="70" x2="150" y2="185" class="ln2" stroke-dasharray="5 3"/>
+        <text x="196" y="140" class="s">卸載斜率 E</text>
+        <line x1="40" y1="200" x2="150" y2="200" class="ln2"/><text x="64" y="218" class="s">殘留塑性應變 εp</text>
+        <text x="64" y="140" class="s">E</text>
+        <text x="170" y="60" class="blue">應力不再增加</text>
+      </svg>
+      <figcaption>一維類比：彈簧串一個摩擦塊。應力到 σy 後塊體滑動，應力不再增加、應變可以無限增長；卸載沿斜率 E 回去，留下塑性應變。</figcaption>
+    </figure>
+    <div>
+      <p>MC 由三件事組成：</p>
+      <ul>
+        <li><b>彈性段</b>：等向線彈性（Hooke 定律），只有 E、ν 兩個參數，E 不隨應力改變。</li>
+        <li><b>破壞準則</b>：Mohr-Coulomb，在主應力空間是一個沿靜水壓軸開放的六角錐。</li>
+        <li><b>完全塑性</b>：降伏面固定，只由 c、φ 決定，不隨塑性應變移動；沒有硬化，也沒有軟化。</li>
+      </ul>
+      <p>應變分成彈性與塑性兩部分，只有彈性應變產生應力：</p>
+      \[ \varepsilon = \varepsilon^{e} + \varepsilon^{p}, \qquad \dot\sigma' = D^{e}\left(\dot\varepsilon - \dot\varepsilon^{p}\right),\qquad \dot\varepsilon^{p} = \lambda\,\frac{\partial g}{\partial\sigma'} \]
+    </div>
+  </div>
+
+  <h3>塑性組成律的四個要素</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>要素</th><th>回答的問題</th><th>MC 的答案</th></tr>
+    <tr><td>彈性</td><td>降伏前怎麼變形</td><td>Hooke 定律，E、ν 為常數</td></tr>
+    <tr><td>降伏面 f = 0</td><td>彈性與塑性的分界</td><td>六個平面圍成的六角錐（5.3）</td></tr>
+    <tr><td>流動法則</td><td>塑性應變往哪個方向</td><td>非關聯：塑性勢 g 用膨脹角 ψ（5.4）</td></tr>
+    <tr><td>硬化法則</td><td>降伏面會不會隨塑性應變改變</td><td>不會，完全塑性</td></tr>
+  </table></div>
+
+  <h3>彈性參數之間的換算</h3>
+  \[ G=\frac{E}{2(1+\nu)},\qquad K=\frac{E}{3(1-2\nu)},\qquad E_{oed}=\frac{(1-\nu)E}{(1-2\nu)(1+\nu)},\qquad K_0^{\text{(一維壓縮)}}=\frac{\nu}{1-\nu} \]
+  <p>以本專案岩體（E = 15 GPa、ν = 0.24）為例：G = 6.05 GPa、K = 9.62 GPa、Eoed = 18.0 GPa；一維壓縮的 K0 = 0.316。</p>
+
+  <div class="grid2">
+    <figure class="shot small"><img src="assets/img/ch5/mc_cone.png" alt="主應力空間中的 MC 六角錐" loading="lazy"><figcaption>主應力空間中的 MC 降伏面（c = 0）：以靜水壓軸為軸、沿壓縮方向開放的六角錐。</figcaption></figure>
+    <div>
+      <h3 style="margin-top:0">一句話記住 MC</h3>
+      <p>MC 只問「這個點破壞了沒有」。面內完全彈性、面固定不動，所以它擅長算<b>極限荷重與穩定性</b>，不擅長算破壞前的變形、應力路徑相依或循環累積（5.8）。</p>
+      <p>PLAXIS 的 MC 共 6 個力學參數：<b>E、ν、c、φ、ψ、σt</b>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5.2 ============ -->
+<section class="sec" id="s2" data-num="5.2" data-short="應力的描述與符號">
+  <div class="sec-head"><span class="sec-num">5.2</span><h2>應力的描述與符號</h2></div>
+  <p>一點的應力張量對稱，有 6 個獨立分量。轉到沒有剪應力的方向得到三個主應力。等向材料的組成律只需要主應力的大小，所以常把它們整理成幾個不變量：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>量</th><th>定義（壓為正）</th><th>物理意義</th></tr>
+    <tr><td>平均應力 p′</td><td>\((\sigma_1'+\sigma_2'+\sigma_3')/3\)</td><td>管體積（擠壓）</td></tr>
+    <tr><td>偏應力 q</td><td>\(\sqrt{\tfrac12\left[(\sigma_1-\sigma_2)^2+(\sigma_2-\sigma_3)^2+(\sigma_3-\sigma_1)^2\right]}\)；三軸時 \(=\sigma_1-\sigma_3\)</td><td>管形狀（剪切）</td></tr>
+    <tr><td>Mohr 圓圓心 s</td><td>\((\sigma_1'+\sigma_3')/2\)</td><td>MC 只用最大與最小主應力</td></tr>
+    <tr><td>Mohr 圓半徑 t</td><td>\((\sigma_1'-\sigma_3')/2\)</td><td>最大剪應力</td></tr>
+    <tr><td>Lode 角 θ</td><td>π 平面上的方向角</td><td>區分三軸壓縮（軸向為最大主應力）與三軸伸張（軸向為最小）</td></tr>
+  </table></div>
+  <div class="callout pitfall"><div class="ct">符號慣例</div><p>土壤力學教科書與本章的原理、互動視窗都採<b>壓為正</b>。<b>PLAXIS 的輸入與輸出採拉為正、壓為負</b>：Output 中的有效應力多半是負值，σ′1 是「最大壓應力」，也就是數值最小（最負）的那一個。讀 PLAXIS 的式子與結果時要先換號。</p></div>
+</section>
+
+<!-- ============ 5.3 ============ -->
+<section class="sec" id="s3" data-num="5.3" data-short="降伏面與張力截斷">
+  <div class="sec-head"><span class="sec-num">5.3</span><h2>降伏面與張力截斷</h2></div>
+  <h3>Mohr 圓與庫倫摩擦</h3>
+  <p>Mohr 圓與破壞線 \(\tau = c + \sigma_n\tan\varphi\) 相切時發生破壞。用主應力寫成（壓為正）：</p>
+  \[ f = \frac{\sigma_1'-\sigma_3'}{2} - \frac{\sigma_1'+\sigma_3'}{2}\sin\varphi - c\cos\varphi \le 0
+     \quad\Longleftrightarrow\quad \sigma_{1f}' = N_\varphi\,\sigma_3' + 2c\sqrt{N_\varphi},\qquad N_\varphi=\frac{1+\sin\varphi}{1-\sin\varphi} \]
+  <figure class="shot"><img src="assets/img/ch5/mohr_mc_tresca.png" alt="有效參數與不排水參數的破壞包絡" loading="lazy"><figcaption>(a) 有效參數 c′、φ′：包絡線與最大的 Mohr 圓相切；(b) 不排水參數 c = su、φ = 0：水平包絡（Tresca）。σ2 不影響破壞。</figcaption></figure>
+  <div class="tablewrap"><table class="data">
+    <tr><th>導出量</th><th>式子</th><th>本專案岩體（c 1351 kPa、φ 38.8°）</th></tr>
+    <tr><td>單軸抗壓強度</td><td>\(\sigma_{cm} = \dfrac{2c\cos\varphi}{1-\sin\varphi}=2c\sqrt{N_\varphi}\)</td><td class="num">5.64 MPa</td></tr>
+    <tr><td>MC 隱含的單軸抗拉強度</td><td>\(\dfrac{2c\cos\varphi}{1+\sin\varphi}\)</td><td class="num">1.29 MPa</td></tr>
+    <tr><td>錐頂（等向受拉）</td><td>\(\sigma_1'=\sigma_2'=\sigma_3' = -c\cot\varphi\)</td><td class="num">−1.68 MPa</td></tr>
+  </table></div>
+  <p>σ2 不出現在式子裡，MC 只看最大與最小主應力；σ2 的影響要在 π 平面上才看得到。</p>
+
+  <h3>PLAXIS 中的六個降伏函數</h3>
+  <p>一般應力狀態下主應力的大小順序不固定，所以把準則套到每一對主應力（含順序對調），得到六個降伏函數。PLAXIS 採拉為正：</p>
+  \[
+  \begin{aligned}
+  f_{1a} &= \tfrac12(\sigma_2'-\sigma_3') + \tfrac12(\sigma_2'+\sigma_3')\sin\varphi - c\cos\varphi \le 0 &
+  f_{1b} &= \tfrac12(\sigma_3'-\sigma_2') + \tfrac12(\sigma_3'+\sigma_2')\sin\varphi - c\cos\varphi \le 0 \\
+  f_{2a} &= \tfrac12(\sigma_3'-\sigma_1') + \tfrac12(\sigma_3'+\sigma_1')\sin\varphi - c\cos\varphi \le 0 &
+  f_{2b} &= \tfrac12(\sigma_1'-\sigma_3') + \tfrac12(\sigma_1'+\sigma_3')\sin\varphi - c\cos\varphi \le 0 \\
+  f_{3a} &= \tfrac12(\sigma_1'-\sigma_2') + \tfrac12(\sigma_1'+\sigma_2')\sin\varphi - c\cos\varphi \le 0 &
+  f_{3b} &= \tfrac12(\sigma_2'-\sigma_1') + \tfrac12(\sigma_2'+\sigma_1')\sin\varphi - c\cos\varphi \le 0
+  \end{aligned} \]
+  <p>六個 \(f_i = 0\) 一起在主應力空間圍成固定的六角錐，錐軸是靜水壓軸。</p>
+
+  <h3>Tension cut-off</h3>
+  <p>c &gt; 0 時 MC 容許拉應力，而且容許值隨 c 增加（上表 1.29 MPa），這對土壤與節理岩體往往不實際。PLAXIS 另外加三個降伏函數（拉為正）：</p>
+  \[ f_4=\sigma_1'-\sigma_t\le0,\qquad f_5=\sigma_2'-\sigma_t\le0,\qquad f_6=\sigma_3'-\sigma_t\le0 \]
+  <p>也就是不容許任何一個主應力的拉應力超過 σt。這三個函數採<b>關聯流動</b>。MC 材料預設勾選 tension cut-off、σt = 0。本專案 e7 取 σt = 289 kPa，只有 MC 隱含值的 22 %。</p>
+
+  <div class="grid2">
+    <figure class="diagram">
+      <svg viewBox="0 0 300 290" role="img" aria-label="π 平面上的 MC 不等邊六角形與 Drucker-Prager 圓">
+        <circle cx="150" cy="150" r="100" class="thin"/>
+        <circle cx="150" cy="150" r="71.4" class="thin"/>
+        <line x1="150" y1="150" x2="150" y2="30" class="ln2"/>
+        <line x1="150" y1="150" x2="46" y2="210" class="ln2"/>
+        <line x1="150" y1="150" x2="254" y2="210" class="ln2"/>
+        <text x="156" y="30">σ′1</text><text x="28" y="226">σ′2</text><text x="250" y="228">σ′3</text>
+        <polygon points="150,50 211.8,114.3 236.6,200 150,221.4 63.4,200 88.2,114.3" class="ac" style="fill:var(--accent-soft)"/>
+        <circle cx="150" cy="50" r="4" class="rdf"/>
+        <circle cx="150" cy="221.4" r="4" class="inkf"/>
+        <text x="160" y="62" class="red" style="font-size:12px">三軸壓縮 rc</text>
+        <text x="158" y="244" style="font-size:12px">三軸伸張 re</text>
+        <text x="8" y="282" class="s">虛線圓：通過壓縮角或伸張角的 Drucker-Prager 近似</text>
+      </svg>
+      <figcaption>沿靜水壓軸往下看（π 平面）。MC 的截面是不等邊六角形：壓縮角離軸較遠、伸張角較近。圖為 φ = 30°。</figcaption>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">π 平面與 p–q 平面</h3>
+      <p>三軸壓縮與三軸伸張破壞時 σ1/σ3 都等於 Nφ，但 σ2 的位置不同，所以在 p–q 平面是兩條斜率不同的線：</p>
+      \[ q_c = M_c\,(p' + c\cot\varphi),\quad M_c=\frac{6\sin\varphi}{3-\sin\varphi};\qquad |q_e| = M_e\,(p' + c\cot\varphi),\quad M_e=\frac{6\sin\varphi}{3+\sin\varphi} \]
+      <p>π 平面上伸張與壓縮的半徑比 \(r_e/r_c=(3-\sin\varphi)/(3+\sin\varphi)\)。φ = 30° 時 Mc = 1.2、Me = 0.857、re/rc = 0.714；若用 Drucker-Prager 圓通過壓縮角，伸張強度會高估約 1.4 倍。</p>
+      <p>錐面沿 p 軸方向開放：單純等向加壓永遠不會降伏。</p>
+    </div>
+  </div>
+
+  <div class="callout example"><div class="ct">算一次：同樣 p 的壓縮與伸張</div>
+    <p>φ = 30°、c = 0 的砂，兩個試體都維持 p = 100 kPa，一個做三軸壓縮、一個做三軸伸張。破壞時：</p>
+    <div class="tablewrap"><table class="data">
+      <tr><th>試驗</th><th class="num">σ1 (kPa)</th><th class="num">σ3 (kPa)</th><th class="num">σ1/σ3</th><th class="num">|q| (kPa)</th></tr>
+      <tr><td>三軸壓縮（軸向 = σ1，σ2 = σ3）</td><td class="num">180</td><td class="num">60</td><td class="num">3</td><td class="num">120</td></tr>
+      <tr><td>三軸伸張（軸向 = σ3，σ2 = σ1）</td><td class="num">128.6</td><td class="num">42.9</td><td class="num">3</td><td class="num">85.7</td></tr>
+    </table></div>
+    <p>兩者在 Mohr 圓上都剛好相切（σ1/σ3 = Nφ = 3）；差別只來自 σ2，伸張強度是壓縮的 0.714 倍。5.6 的互動視窗選「壓縮 vs 伸張」可以直接看到。</p>
+  </div>
+</section>
+
+<!-- ============ 5.4 ============ -->
+<section class="sec" id="s4" data-num="5.4" data-short="流動法則與膨脹角">
+  <div class="sec-head"><span class="sec-num">5.4</span><h2>流動法則與膨脹角</h2></div>
+  <p>塑性應變率等於塑性乘數乘上塑性勢的梯度，\(\dot\varepsilon^{p} = \lambda\,\partial g/\partial\sigma'\)：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>狀態</th><th>條件</th><th>λ</th></tr>
+    <tr><td>彈性</td><td>\(f&lt;0\)，或 \(f=0\) 但 \(\left(\partial f/\partial\sigma'\right)^{T}D^{e}\dot\varepsilon\le0\)（往面內卸載）</td><td>λ = 0</td></tr>
+    <tr><td>塑性</td><td>\(f=0\) 且 \(\left(\partial f/\partial\sigma'\right)^{T}D^{e}\dot\varepsilon&gt;0\)（繼續往外推）</td><td>λ &gt; 0</td></tr>
+  </table></div>
+  <p>持續降伏時應力點必須留在降伏面上（一致性條件 \(\dot f = 0\)），λ 就由這個條件求出。MC 的面不會動，所以應力停住、應變持續增加。</p>
+
+  <h3>關聯與非關聯</h3>
+  <p>若 g = f（關聯流動），塑性應變垂直於降伏面。對 MC 而言這會<b>高估膨脹</b>：剪動時體積一直以固定比例膨脹，在受圍束的問題（樁、錨碇、深開挖底部）中會提高圍壓、高估承載力。所以 PLAXIS 的 MC 另外定義塑性勢，把 φ 換成膨脹角 ψ，並去掉 c 項：</p>
+  \[ g = \frac{\sigma_1'-\sigma_3'}{2} - \frac{\sigma_1'+\sigma_3'}{2}\sin\psi \qquad(\text{壓為正；另外五個同理}) \]
+  <div class="grid2">
+    <figure class="diagram">
+      <svg viewBox="0 0 340 240" role="img" aria-label="關聯與非關聯流動方向">
+        <line x1="40" y1="205" x2="325" y2="205" class="ln"/><line x1="40" y1="205" x2="40" y2="15" class="ln"/>
+        <text x="214" y="228" class="s">p′、εvp（壓縮為正）</text>
+        <text x="48" y="22" class="s">q、εqp</text>
+        <line x1="40" y1="205" x2="310" y2="45" class="ln"/><text x="276" y="44">f = 0</text>
+        <circle cx="190" cy="116" r="4.5" class="inkf"/>
+        <line x1="190" y1="116" x2="148" y2="45" class="rd"/>
+        <polygon points="148,45 146,58 156,53" class="rdf"/>
+        <text x="64" y="40" class="red">g = f：垂直降伏面</text>
+        <text x="64" y="58" class="red" style="font-size:12px">朝左上 ＝ 剪脹</text>
+        <line x1="190" y1="116" x2="190" y2="35" class="ac"/>
+        <polygon points="190,35 185,48 195,48" class="acf"/>
+        <text x="198" y="32" class="blue">ψ = 0：純剪</text>
+        <text x="198" y="50" class="s">無塑性體積變化</text>
+      </svg>
+      <figcaption>把塑性應變增量畫在 p–q 座標上。關聯流動的箭頭垂直於降伏面，帶有很大的膨脹分量；ψ = 0 時箭頭垂直向上，塑性流動不改變體積。</figcaption>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">ψ 決定剪脹比</h3>
+      <p>對 g 微分，平面應變（ε1 − ε3 方向剪動）時：</p>
+      \[ \frac{\dot\varepsilon_v^{p}}{\dot\gamma^{p}} = -\sin\psi,\qquad \dot\gamma^{p}=\dot\varepsilon_1^{p}-\dot\varepsilon_3^{p} \]
+      <p>三軸壓縮剛好落在角點（σ2 = σ3，兩個面同時作用），換成軸向塑性應變：</p>
+      \[ \frac{\dot\varepsilon_v^{p}}{\dot\varepsilon_a^{p}} = -\frac{2\sin\psi}{1-\sin\psi} \]
+      <ul>
+        <li>ψ = 0：塑性流動不改變體積。</li>
+        <li>ψ &gt; 0：只要持續剪動就一直膨脹。MC <b>沒有 dilatancy cut-off</b>（只有 HS、HSsmall 有），不會在臨界狀態停下來。</li>
+        <li>ψ ≠ φ 時彈塑性勁度矩陣不對稱（5.5）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>角點的處理</h3>
+  <p>光滑降伏面的塑性理論在角點不適用：應力落在兩個面的交線上時，法線是一個扇形，不是唯一方向。三軸壓縮與三軸伸張剛好都在角點上。</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>做法</th><th>內容</th></tr>
+    <tr><td>多勢函數（Koiter 法則）</td><td>\(\dot\varepsilon^{p}=\lambda_1\,\partial g_1/\partial\sigma' + \lambda_2\,\partial g_2/\partial\sigma' + \dots\)，各個 λ 由對應的降伏函數決定。<b>PLAXIS 用這種精確的尖角做法</b>，5.6 的互動視窗也是</td></tr>
+    <tr><td>角點修圓</td><td>用平滑曲線取代尖角（例如在 Lode 角接近 30° 處圓化），回傳較穩定，但和原本的 MC 略有差異；OpenSees 的部分 MC 實作就是這樣</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 5.5 ============ -->
+<section class="sec" id="s5" data-num="5.5" data-short="PLAXIS 的應力點回傳">
+  <div class="sec-head"><span class="sec-num">5.5</span><h2>PLAXIS 在應力點上怎麼算 MC</h2></div>
+  <p>有限元素的整體迭代（第 1 章）每一次都會給每個應力點一個應變增量 Δε。組成律的工作只有一件：<b>由 Δε 算出新的應力 σ</b>。MC 用「彈性試算＋回傳」：</p>
+  <ol class="steps">
+    <li><b>彈性試算</b>：\(\sigma^{tr} = \sigma^{i-1} + D^{e}\Delta\varepsilon\)。</li>
+    <li>若九個函數（六個 MC＋三個張力）都 \(f(\sigma^{tr}) \le 0\)：彈性，\(\sigma = \sigma^{tr}\)，結束。</li>
+    <li>否則求塑性乘數 \(\Delta\lambda = \langle f(\sigma^{tr})\rangle / d\)，\(d = (\partial f/\partial\sigma)^{T} D^{e}\, (\partial g/\partial\sigma)\)（完全塑性，硬化模數為 0）。</li>
+    <li><b>拉回</b>：\(\sigma = \sigma^{tr} - \Delta\lambda\, D^{e}\,\partial g/\partial\sigma\)。</li>
+    <li>角點：兩個（或三個）面同時作用，聯立求各自的 Δλ；張力：受拉主應力直接拉回 σt。</li>
+  </ol>
+  <p>MC 的每個面在主應力空間都是平面、塑性勢的梯度是常數，所以上面的回傳是<b>一步到位的精確解</b>，不必迭代。互動視窗（5.6）用的就是同一套演算法：九個函數任取 1–3 個為作用面，解出 Δλ ≥ 0 且回傳後所有 f ≤ 0 的那一組。</p>
+
+  <h3>彈塑性勁度矩陣</h3>
+  \[ \dot\sigma' = \left(D^{e} - \frac{\alpha}{d}\,D^{e}\frac{\partial g}{\partial\sigma'}\frac{\partial f}{\partial\sigma'}^{T}D^{e}\right)\dot\varepsilon,\qquad \alpha = \begin{cases}0 & \text{彈性}\\ 1 & \text{塑性}\end{cases} \]
+  <ul>
+    <li>g ≠ f 時 \(\partial g/\partial\sigma'\) 與 \(\partial f/\partial\sigma'\) 不同，括號內的 \(D^{ep}\) <b>不對稱</b>，整體勁度要改用非對稱解法，成本約加倍。</li>
+    <li>PLAXIS 的 MC 不用 \(D^{ep}\) 組勁度，而是一直用彈性勁度 \(D^{e}\) 迭代，所以不受非對稱影響，代價是迭代次數較多；不平衡力靠迭代重新分配。</li>
+  </ul>
+
+  <h3>局部誤差與 inaccurate 點</h3>
+  <p>迭代中某個應力點的「平衡應力」\(\sigma^{eq}\) 和回傳得到的 \(\sigma^{c}\) 差太多，就記為 inaccurate：</p>
+  \[ \text{local error} = \frac{\lVert\sigma^{eq}-\sigma^{c}\rVert}{\max(\tau_{max},\ c,\ 1\ \text{kPa})},\qquad \text{收斂要求：inaccurate 點數} &lt; 0.1\times\text{塑性點數} + 3 \]
+  <div class="tablewrap"><table class="data">
+    <tr><th>Active tasks 視窗欄位</th><th>和 MC 的關係</th></tr>
+    <tr><td>Plastic stress points</td><td>回傳到 MC 面上的應力點數</td></tr>
+    <tr><td>Tension points</td><td>回傳到 tension cut-off 的點數；這種點受拉方向勁度為零</td></tr>
+    <tr><td>Apex points</td><td>回到錐頂的點，容許剪應力為 0</td></tr>
+    <tr><td>Inaccurate／Tolerated</td><td>局部誤差超過容許的點數／容許數</td></tr>
+  </table></div>
+  <div class="callout link"><div class="ct">本專案實例</div><p>plan_e 的 e1 在 L16 停在 ΣMstage 0.551、CSP ≈ 0：166 個塑性點中 116 個是張力點。開挖面幾個元素全進入張力截斷、勁度為零，位移發散到步數用完（Error 102）。這不是整體崩塌，而是 tension cut-off 造成的局部零勁度；e4 之後加密洞周網格、修正拱腳近點才算完。</p></div>
+</section>
+
+<!-- ============ 5.6 ============ -->
+<section class="sec" id="s6" data-num="5.6" data-short="互動：MC 元素試驗室">
+  <div class="sec-head"><span class="sec-num">5.6</span><h2>互動：MC 元素試驗室</h2></div>
+  <p>這個視窗在瀏覽器裡跑一個 MC 應力點：每一步給應變增量，照 5.5 的方法回傳，再依試驗的邊界條件（側向應力固定、不排水、σv 固定…）求出未知的應變分量。<b>壓為正、單位 kPa</b>。先按上面的情境按鈕，再自己改參數；參數一改就重算。</p>
+
+  <div class="widget lab" id="lab">
+    <div class="w-head"><span class="ptag">Element test · Mohr-Coulomb</span><span class="wt">Mohr-Coulomb 元素試驗</span></div>
+    <div class="w-body">
+      <div class="presets" id="presets"></div>
+
+      <div class="pgroup"><div class="gt">試驗</div>
+        <div class="controls">
+          <div class="ctrl"><label for="t_test">試驗種類</label><select id="t_test">
+            <option value="TXC">排水三軸壓縮（CD）</option>
+            <option value="TXE">排水三軸伸張</option>
+            <option value="CU">不排水三軸壓縮（CU）</option>
+            <option value="CUE">不排水三軸伸張</option>
+            <option value="CYC">不排水循環三軸（應變控制）</option>
+            <option value="DSS">排水單剪 DSS（σv 固定）</option>
+            <option value="DSSU">等體積單剪（不排水 DSS）</option>
+          </select></div>
+          <div class="ctrl"><label for="t_sv">初始 σ′v（軸向）</label><input type="number" id="t_sv" step="10"></div>
+          <div class="ctrl"><label for="t_k0">K0 ＝ σ′h／σ′v</label><input type="range" id="t_k0" min="0.3" max="2" step="0.01"><output id="o_k0"></output></div>
+          <div class="ctrl" data-mono><label for="t_emax">最大應變（%）</label><input type="number" id="t_emax" step="0.1" min="0.01"></div>
+          <div class="ctrl" data-cyc><label for="t_amp">軸向應變振幅（%）</label><input type="number" id="t_amp" step="0.05" min="0.01"></div>
+          <div class="ctrl" data-cyc><label for="t_ncyc">循環數</label><input type="number" id="t_ncyc" step="1" min="1" max="20"></div>
+          <div class="ctrl" data-und><label for="t_nuu">νu（不排水柏松比）</label><input type="range" id="t_nuu" min="0.4" max="0.499" step="0.001"><output id="o_nuu"></output></div>
+          <div class="ctrl check" data-und><input type="checkbox" id="t_cav"><label for="t_cav">Cavitation cut-off：超額孔壓不低於 −100 kPa</label></div>
+        </div>
+      </div>
+
+      <div class="pgroup"><div class="gt">材料參數</div>
+        <div class="controls">
+          <div class="ctrl"><label for="m_E">E′（MPa）</label><input type="number" id="m_E" step="1" min="0.1"></div>
+          <div class="ctrl"><label for="m_nu">ν′</label><input type="range" id="m_nu" min="0" max="0.45" step="0.01"><output id="o_nu"></output></div>
+          <div class="ctrl"><label for="m_c">c′（kPa）</label><input type="number" id="m_c" step="1" min="0"></div>
+          <div class="ctrl"><label for="m_phi">φ′（°）</label><input type="range" id="m_phi" min="0" max="55" step="0.1"><output id="o_phi"></output></div>
+          <div class="ctrl"><label for="m_psi">ψ（°，≤ φ′）</label><input type="range" id="m_psi" min="0" max="55" step="0.1"><output id="o_psi"></output></div>
+          <div class="ctrl check"><input type="checkbox" id="m_tc"><label for="m_tc">Tension cut-off</label></div>
+          <div class="ctrl"><label for="m_st">σt（kPa）</label><input type="number" id="m_st" step="1" min="0"></div>
+        </div>
+      </div>
+
+      <div class="runbar">
+        <button class="btn primary" id="b_play" type="button">▶ 播放</button>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="計算步">
+        <span class="pos" id="pos"></span>
+      </div>
+      <div class="runbar">
+        <button class="btn" id="b_ghost" type="button">把這次結果設為對照（灰）</button>
+        <button class="btn" id="b_clear" type="button">清除對照</button>
+        <span class="ghostlbl" id="ghostlbl"></span>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="plots">
+        <figure><figcaption>應力路徑 p′–q <small id="cap_pq"></small></figcaption><svg class="plot-svg" id="g_pq" viewBox="0 0 400 310"></svg></figure>
+        <figure><figcaption id="cap_ss">應力–應變</figcaption><svg class="plot-svg" id="g_ss" viewBox="0 0 400 310"></svg></figure>
+        <figure><figcaption id="cap_vol">體積應變</figcaption><svg class="plot-svg" id="g_vol" viewBox="0 0 400 310"></svg></figure>
+        <figure><figcaption>π 平面 <small>（目前 p′ 的截面）</small></figcaption><svg class="plot-svg" id="g_pi" viewBox="0 0 400 330"></svg></figure>
+        <figure class="span2"><figcaption>Mohr 圓 <small>（目前這一步；壓為正）</small></figcaption><svg class="plot-svg" id="g_mohr" viewBox="0 0 640 330"></svg></figure>
+      </div>
+      <div class="legend">
+        <span><i style="border-color:var(--blue)"></i>本次結果（有效應力）</span>
+        <span><i style="border-color:var(--gray);border-top-style:dashed"></i>總應力路徑（不排水）</span>
+        <span><i style="border-color:var(--ink)"></i>MC 破壞線</span>
+        <span><i style="border-color:var(--red);border-top-style:dashed"></i>張力截斷</span>
+        <span><i style="border-color:var(--gray)"></i>對照組</span>
+      </div>
+      <p class="w-note" id="note"></p>
+    </div>
+  </div>
+
+  <h3>看什麼</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>情境</th><th>要看的現象</th><th>原因</th></tr>
+    <tr><td>排水三軸 ψ = 0 ／ ψ = φ</td><td>q 都停在同一個 q_f；ψ = 0 時降伏後 εv 水平，ψ = φ 時 εv 直線下降（膨脹）</td><td>強度只由 c、φ 決定；體積只由 ψ 決定，\(\dot\varepsilon_v^p/\dot\varepsilon_a^p=-2\sin\psi/(1-\sin\psi)\)</td></tr>
+    <tr><td>不排水 ψ = 0</td><td>有效應力路徑垂直上升，在破壞線上停住</td><td>彈性段 p′ 不變（體積不變）；塑性也不改變體積，所以 p′ 一直不變</td></tr>
+    <tr><td>不排水 ψ &gt; 0</td><td>碰到破壞線後沿線<b>一直往上爬</b>，孔壓一直下降，強度沒有上限</td><td>剪脹要膨脹、體積又不能變 → 負孔壓提高 p′ → 強度提高；這是 MC 的已知缺點，PLAXIS 用 cavitation cut-off 限制</td></tr>
+    <tr><td>壓縮 vs 伸張</td><td>伸張的 |q| 較小，在 π 平面停在較近的伸張角</td><td>σ2 的位置不同，re/rc = (3 − sinφ)/(3 + sinφ)</td></tr>
+    <tr><td>單剪 DSS</td><td>τ/σ′v 停在 \(\sin\varphi\cos\psi/(1-\sin\varphi\sin\psi)\)；p′–q 圖上的終點落在壓縮線與伸張線之間</td><td>主應力方向旋轉，終點 Lode 角在兩個角點之間</td></tr>
+    <tr><td>不排水循環</td><td>每一圈都回到同樣的 p′，孔壓不累積</td><td>面內完全彈性；這就是 MC 不能算液化的原因（第 6 章 PM4Sand）</td></tr>
+    <tr><td>岩體 e7 參數伸張</td><td>軸向應力停在 −289 kPa，狀態顯示「張力截斷」，Mohr 圓左端貼在 −σt</td><td>關閉張力截斷時要到 −1.18 MPa 才破壞</td></tr>
+  </table></div>
+  <details class="derive"><summary>驗算：互動視窗和理論解的對照</summary><div class="body">
+    <p>同一份程式碼在 Node.js 下另外跑過以下對照，誤差都在 10⁻⁶ 以內：</p>
+    <div class="tablewrap"><table class="data">
+      <tr><th>試驗</th><th>理論</th><th class="num">理論值</th><th class="num">計算值</th></tr>
+      <tr><td>CD 三軸，φ 30°、c 10、σ′3 100</td><td>\(q_f=(N_\varphi-1)\sigma_3'+2c\sqrt{N_\varphi}\)</td><td class="num">234.64</td><td class="num">234.64</td></tr>
+      <tr><td>CD 三軸，岩體 e7、σ′3 2000</td><td>同上</td><td class="num">12,351.99</td><td class="num">12,351.99</td></tr>
+      <tr><td>排水伸張，φ 30°、σ′r 100</td><td>\(|q|/p' = M_e\)</td><td class="num">0.8571</td><td class="num">0.8571</td></tr>
+      <tr><td>DSS，φ 30°、ψ 15°</td><td>\(\sin\varphi\cos\psi/(1-\sin\varphi\sin\psi)\)</td><td class="num">0.5548</td><td class="num">0.5548</td></tr>
+      <tr><td>CD 三軸，φ = ψ = 35°，破壞後</td><td>\(\dot\varepsilon_v/(\dot\varepsilon_a-\dot\varepsilon_r) = -4\sin\psi/(3-\sin\psi)\)</td><td class="num">−0.9456</td><td class="num">−0.9456</td></tr>
+      <tr><td>岩體伸張，tension cut-off 關閉</td><td>\(\sigma_3=(\sigma_1-2c\sqrt{N_\varphi})/N_\varphi\)</td><td class="num">−1,179.80</td><td class="num">−1,179.80</td></tr>
+    </table></div>
+    <p>不排水 ψ = 0 時 p′ 會有不到 1 % 的變化，因為 νu = 0.495 並非完全不可壓縮（PLAXIS Undrained (A) 也是同樣的處理）。</p>
+  </div></details>
+</section>
+
+<!-- ============ 5.7 ============ -->
+<section class="sec" id="s7" data-num="5.7" data-short="互動：Mohr 圓試算">
+  <div class="sec-head"><span class="sec-num">5.7</span><h2>互動：Mohr 圓試算</h2></div>
+  <p>直接輸入強度參數與一組主應力，看應力狀態相對於 MC 包絡線與 tension cut-off 的位置，並算出常用的導出量。<b>壓為正</b>，單位 kPa；預設值為本專案岩體參數。</p>
+  <div class="widget">
+    <div class="mohrcalc">
+      <div class="controls">
+        <div class="ctrl rn"><label for="r_c">c′</label><input type="range" id="r_c" min="0" max="3000" step="10"><input type="number" id="n_c" step="10"></div>
+        <div class="ctrl rn"><label for="r_phi">φ′（°）</label><input type="range" id="r_phi" min="0" max="60" step="0.1"><input type="number" id="n_phi" step="0.1"></div>
+        <div class="ctrl rn"><label for="r_st">σt</label><input type="range" id="r_st" min="0" max="2000" step="10"><input type="number" id="n_st" step="10"></div>
+        <div class="ctrl rn"><label for="r_s3">σ′3</label><input type="range" id="r_s3" min="-2000" max="10000" step="10"><input type="number" id="n_s3" step="10"></div>
+        <div class="ctrl rn"><label for="r_s1">σ′1</label><input type="range" id="r_s1" min="-2000" max="30000" step="10"><input type="number" id="n_s1" step="10"></div>
+      </div>
+      <div>
+        <svg class="plot-svg" id="mohr" viewBox="0 0 640 330" role="img" aria-label="Mohr 圓與 MC 包絡線"></svg>
+        <p style="margin:6px 0">狀態：<span id="mstate" class="state el">彈性</span></p>
+        <div class="tablewrap" style="margin:.4em 0"><table class="data readout" id="readout"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5.8 ============ -->
+<section class="sec" id="s8" data-num="5.8" data-short="MC 的限制">
+  <div class="sec-head"><span class="sec-num">5.8</span><h2>MC 的限制</h2></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>限制</th><th>後果</th><th>哪種模型處理</th></tr>
+    <tr><td>降伏面內完全彈性</td><td>破壞前看不到塑性變形；循環載重下孔隙水壓不會累積（5.6 不排水循環）</td><td>Cam clay、邊界面模型（SANISAND、PM4Sand）</td></tr>
+    <tr><td>沿 p 軸開放，沒有帽蓋</td><td>等向壓縮不會產生塑性應變</td><td>Cam clay、HS（cap）</td></tr>
+    <tr><td>沒有硬化與載重歷史</td><td>不記得預壓密、不記得上一次反轉</td><td>HS、Cam clay、PM4Sand</td></tr>
+    <tr><td>膨脹比固定，沒有臨界狀態</td><td>ψ &gt; 0 時無限膨脹；不排水時強度無限上升</td><td>HS 的 dilatancy cut-off、臨界狀態模型</td></tr>
+    <tr><td>φ、ψ 與密度無關</td><td>同一組參數不能同時描述疏砂與密砂</td><td>狀態參數模型（SANISAND、PM4Sand）</td></tr>
+    <tr><td>勁度為常數</td><td>不含應力、應力路徑、應變相依與異向性（只能隨深度線性增加）</td><td>HS、HSsmall</td></tr>
+    <tr><td>強度包絡為直線</td><td>岩石強度隨圍壓非線性，大範圍應力下不足；也無法自然描述岩石的抗拉強度</td><td>Hoek-Brown</td></tr>
+    <tr><td>不排水用 φ = 0、c = su</td><td>強度不會隨壓密增加</td><td>改用有效應力參數或進階模型</td></tr>
+  </table></div>
+  <div class="callout intuition"><div class="ct">MC 適合做什麼</div><p>MC 只需要 E、ν、c、φ、ψ 五個參數，都能從常規試驗取得。用 c′、φ′ 描述破壞時的有效應力狀態相當合理，所以適合做破壞荷重與穩定性這類問題，或當作第一近似；拿它預測變形就要很小心選 E。對液化而言最關鍵的是第一、三列：面內沒有塑性體積變化、也沒有載重歷史，孔隙水壓無法累積——這正是第 6 章 PM4Sand 要補的。</p></div>
+</section>
+
+<!-- ============ 5.9 ============ -->
+<section class="sec" id="s9" data-num="5.9" data-short="PLAXIS 參數">
+  <div class="sec-head"><span class="sec-num">5.9</span><h2>PLAXIS 參數：勁度與強度</h2></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>類別</th><th>參數</th><th>單位</th><th></th><th>典型範圍</th><th>取得方式</th></tr>
+    <tr><td>勁度</td><td>E′ (E<sub>ref</sub>)</td><td>kN/m²</td><td><span class="ptag req">必填</span></td><td>—</td><td>三軸試驗；依用途選 E0／E50／Eur</td></tr>
+    <tr><td>勁度</td><td>ν′</td><td>–</td><td><span class="ptag req">必填</span></td><td>加載 0.3–0.4；卸載 0.15–0.25</td><td>由 K0 = ν/(1−ν) 反算；Undrained (A)(B) 時 ν′ &lt; 0.35</td></tr>
+    <tr><td>強度</td><td>c′（或 su）</td><td>kN/m²</td><td><span class="ptag req">必填</span></td><td>建議 &gt; 0.2</td><td>三軸、直剪；或以不排水強度 su 代入</td></tr>
+    <tr><td>強度</td><td>φ′</td><td>°</td><td><span class="ptag req">必填</span></td><td>黏土、粉土 20–30；砂礫 30–40</td><td>三軸、直剪</td></tr>
+    <tr><td>強度</td><td>ψ</td><td>°</td><td><span class="ptag req">必填</span></td><td>0 至 φ − 30</td><td>石英砂 ψ ≈ φ − 30°（φ &lt; 30° 取 0）；黏土 ≈ 0</td></tr>
+    <tr><td>勁度替代</td><td>G、Eoed</td><td>kN/m²</td><td><span class="ptag opt">選填</span></td><td>—</td><td>與 E 擇一，程式換算 E，ν 不變</td></tr>
+    <tr><td>強度</td><td>σt</td><td>kN/m²</td><td><span class="ptag opt">選填</span></td><td>預設 0（cut-off 開啟）</td><td>依現場張裂觀察；岩體可由 Hoek-Brown 換算</td></tr>
+    <tr><td>動力</td><td>Vp、Vs</td><td>m/s</td><td><span class="ptag opt">選填</span></td><td>—</td><td>\(V_p=\sqrt{E_{oed}/\rho}\)、\(V_s=\sqrt{G/\rho}\)，\(\rho=\gamma_{unsat}/g\)</td></tr>
+    <tr><td>隨深度</td><td>E<sub>inc</sub>、c<sub>inc</sub></td><td>kN/m²/m</td><td><span class="ptag opt">選填</span></td><td>依場址</td><td>配合參考高程 y<sub>ref</sub></td></tr>
+  </table></div>
+
+  <h3>E 要選哪一個</h3>
+  <div class="grid2">
+    <figure class="shot small"><img src="assets/img/ch5/e0_e50_eur.png" alt="E0、E50、Eur 的定義" loading="lazy"><figcaption>排水三軸試驗中三種模數：初始切線 E0、50 % 強度割線 E50、卸載–再加載 Eur。</figcaption></figure>
+    <div>
+      <ul>
+        <li><b>E0</b>：初始切線模數，線彈性範圍大的材料用它。</li>
+        <li><b>E50</b>：50 % 強度處的割線模數，一般加載問題用它。</li>
+        <li><b>Eur</b>：卸載–再加載模數，通常明顯大於 E50。<b>開挖、隧道屬於卸載問題，應該用 Eur 或岩體變形模數。</b></li>
+      </ul>
+      <p>土壤勁度會隨圍壓增加、隨應力路徑改變，但 MC 的 E 是常數，所以要選一個與應力水準、應力路徑一致的值。Undrained (A)(B) 時輸入的是有效 E′，PLAXIS 會自動處理不可壓縮性（5.10）。</p>
+    </div>
+  </div>
+
+  <h3>ν 與 K0</h3>
+  <ul>
+    <li>一維壓縮下 MC 給出 \(K_0=\nu/(1-\nu)\)，所以常用 K0 反算 ν，多半落在 0.3–0.4；這種方式得不到 K0 &gt; 1。</li>
+    <li>卸載問題（開挖）取 0.15–0.25 較適當。</li>
+    <li>Undrained (A)(B) 時 ν′ 要小於 0.35，確保土骨架比孔隙水容易壓縮。</li>
+  </ul>
+  <h3>G、Eoed、波速與隨深度增加</h3>
+  <p>輸入 G 或 Eoed 中的任一個，程式會換算出 E，ν 保持不變。動力分析時勁度要能正確預測波速，通常要用小應變勁度；MC 在破壞面內只有彈性應變，沒有遲滯阻尼、應變累積或液化，要另外設 Rayleigh 阻尼。</p>
+  \[ E(y) = E_{ref} + (y_{ref}-y)\,E_{inc},\qquad c(y) = c_{ref} + (y_{ref}-y)\,c_{inc}\qquad (y&lt;y_{ref}) \]
+  <p>這兩個值只隨深度變化，計算中<b>不會</b>隨應力狀態改變。</p>
+
+  <h3>強度參數</h3>
+  <ul>
+    <li><b>c′ 配 φ′</b>：Drained 或 Undrained (A)，做有效應力分析，壓密後強度會自動增加。</li>
+    <li><b>su 配 φ = 0</b>：Undrained (B)(C)，MC 退化為 Tresca，可直接控制剪力強度；Undrained (A) 用 c′、φ′ 時，模型給出的不排水強度可能和實際不同，建議每個階段檢查 \(|\sigma_1-\sigma_3|\le 2s_u\)。</li>
+    <li><b>c = 0</b> 可以算，但某些選項表現不好，近地表層建議至少給 0.2 kPa。</li>
+    <li><b>φ 高</b>時塑性計算量明顯增加，初步計算應避免太高的 φ。</li>
+    <li><b>ψ</b>：黏土除重度過壓密者外 ≈ 0；石英砂 ≈ φ − 30°；負值只適用極鬆砂。Undrained (B)(C) 時 ψ 自動設為 0。Undrained (A) 配 ψ &gt; 0 時，剪脹會產生拉的孔隙應力，強度無限增加，必須開 cavitation cut-off（5.6 可以實際看到）。</li>
+    <li><b>σt</b>：預設勾選 Tension cut-off、σt = 0；岩體可依 Hoek-Brown 換算 \(\sigma_t = s\,\sigma_{ci}/m_b\) 給非零值。</li>
+  </ul>
+</section>
+
+<!-- ============ 5.10 ============ -->
+<section class="sec" id="s10" data-num="5.10" data-short="排水類型">
+  <div class="sec-head"><span class="sec-num">5.10</span><h2>排水類型</h2></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>Drainage type</th><th>勁度參數</th><th>強度參數</th><th>說明</th></tr>
+    <tr><td>Drained</td><td>E′、ν′</td><td>c′、φ′、ψ</td><td>不產生超額孔隙水壓；長期行為。本專案岩體用這個</td></tr>
+    <tr><td>Undrained (A)</td><td>E′、ν′（有效）</td><td>c′、φ′、ψ（有效）</td><td>有效應力分析，程式疊加孔隙水的體積勁度；不排水強度是計算結果</td></tr>
+    <tr><td>Undrained (B)</td><td>E′、ν′（有效）</td><td>su，φ = 0，ψ = 0</td><td>勁度用有效參數，強度直接用 su</td></tr>
+    <tr><td>Undrained (C)</td><td>Eu、νu（總應力）</td><td>su，φ = 0，ψ = 0</td><td>總應力分析，不計算孔隙水壓</td></tr>
+    <tr><td>Non-porous</td><td>E、ν</td><td>c、φ、ψ</td><td>無孔隙水，例如混凝土或完整岩體</td></tr>
+  </table></div>
+  <p>Undrained (A)(B) 時，程式在土骨架上疊加孔隙水的等效體積勁度（5.6 的不排水試驗就是這樣做的）：</p>
+  \[ \frac{K_{w,ref}}{n} = \frac{3(\nu_u-\nu')}{(1-2\nu_u)(1+\nu')}\,K',\qquad K'=\frac{E'}{3(1-2\nu')},\qquad B = \frac{3(\nu_u-\nu')}{(1+\nu_u)(1-2\nu')} \]
+  <p>νu 預設 0.495，不可取 0.5，否則 Kw → ∞。檢核：ν′ = 0、νu = 0.495 時 B = 1.485／1.495 = 0.9933，和材料視窗顯示的值一致。</p>
+</section>
+
+<!-- ============ 5.11 ============ -->
+<section class="sec" id="s11" data-num="5.11" data-short="材料視窗逐頁填寫">
+  <div class="sec-head"><span class="sec-num">5.11</span><h2>材料視窗逐頁填寫</h2></div>
+  <p>Show materials → Soil and interfaces → New。左邊是空白的 MC 材料視窗，右表逐欄說明，最後一欄是本專案岩體（plan_e e7，Rock_MC_TC289）實際填的值。標記：<span class="ptag req">必填</span><span class="ptag opt">選填</span><span class="ptag">自動／MC 力學分析不需</span></p>
+  <div class="tabs" id="wtabs">
+    <button class="on" data-t="w1">General</button><button data-t="w2">Mechanical · 勁度</button><button data-t="w3">Mechanical · 強度</button><button data-t="w4">Mechanical · 不排水</button><button data-t="w5">Groundwater</button><button data-t="w6">Interfaces</button><button data-t="w7">Initial</button>
+  </div>
+  <div class="tabpane on" id="w1"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_general.png" alt="General 分頁" loading="lazy"></figure>
+    <div class="tablewrap" style="margin:0"><table class="data">
+      <tr><th>項目</th><th></th><th>說明</th><th>e7</th></tr>
+      <tr><td>Soil model、Drainage type</td><td><span class="ptag req">必填</span></td><td>選 Mohr-Coulomb；排水類型決定用有效或總應力參數（5.10）</td><td class="v">Mohr-Coulomb、Drained</td></tr>
+      <tr><td>Identification、Colour、Comments</td><td><span class="ptag opt">選填</span></td><td>名稱、顏色、備註，不影響計算</td><td class="v">Rock_MC_TC289</td></tr>
+      <tr><td>γ<sub>unsat</sub>、γ<sub>sat</sub></td><td><span class="ptag req">必填</span></td><td>水位以上／以下的單位重，產生自重應力</td><td class="v">27.0、27.0</td></tr>
+      <tr><td>e<sub>init</sub>、n<sub>init</sub></td><td><span class="ptag opt">選填</span></td><td>初始孔隙比（兩者連動），用於滲流與不排水的體積行為</td><td class="v">預設</td></tr>
+      <tr><td>Rayleigh damping</td><td><span class="ptag opt">選填</span></td><td>動力分析才需要，以兩個頻率的目標阻尼比定義；α、β 自動換算</td><td class="v">—</td></tr>
+    </table></div>
+  </div></div>
+  <div class="tabpane" id="w2"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_mech_stiff.png" alt="Mechanical 分頁：勁度" loading="lazy"></figure>
+    <div class="tablewrap" style="margin:0"><table class="data">
+      <tr><th>項目</th><th></th><th>說明</th><th>e7</th></tr>
+      <tr><td>E′<sub>ref</sub>、ν′</td><td><span class="ptag req">必填</span></td><td>線彈性段的兩個基本參數（5.9）</td><td class="v">15E6、0.24</td></tr>
+      <tr><td>Alternatives：G<sub>ref</sub>、Eoed</td><td><span class="ptag opt">選填</span></td><td>與 E′<sub>ref</sub> 擇一輸入，程式換算 E′，ν 不變</td><td class="v">自動帶出</td></tr>
+      <tr><td>Depth-dependency：E′<sub>inc</sub>、y<sub>ref</sub></td><td><span class="ptag opt">選填</span></td><td>勁度隨深度線性增加</td><td class="v">0</td></tr>
+      <tr><td>Wave velocities：Vs、Vp</td><td><span class="ptag opt">選填</span></td><td>與 E′、ν 互相換算；動力分析檢核用</td><td class="v">自動帶出</td></tr>
+    </table></div>
+  </div></div>
+  <div class="tabpane" id="w3"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_mech_strength.png" alt="Mechanical 分頁：強度" loading="lazy"></figure>
+    <div class="tablewrap" style="margin:0"><table class="data">
+      <tr><th>項目</th><th></th><th>說明</th><th>e7</th></tr>
+      <tr><td>c′<sub>ref</sub>、φ′、ψ</td><td><span class="ptag req">必填</span></td><td>破壞包絡與膨脹角</td><td class="v">1351、38.8、0</td></tr>
+      <tr><td>Depth-dependency：c′<sub>inc</sub>、y<sub>ref</sub></td><td><span class="ptag opt">選填</span></td><td>凝聚力隨深度增加；φ′ &gt; 0 時通常不需要</td><td class="v">0</td></tr>
+      <tr><td>Tension cut-off、Tensile strength</td><td><span class="ptag opt">選填</span></td><td>預設勾選、σt = 0；岩體可給非零值</td><td class="v">勾選、289</td></tr>
+    </table></div>
+  </div></div>
+  <div class="tabpane" id="w4"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_mech_undrained.png" alt="Mechanical 分頁：超額孔隙水壓" loading="lazy"></figure>
+    <div class="tablewrap" style="margin:0"><table class="data">
+      <tr><th>項目</th><th></th><th>說明</th><th>e7</th></tr>
+      <tr><td>Determination</td><td><span class="ptag opt">選填</span></td><td>超額孔隙水壓參數的定義方式，預設 ν-undrained definition</td><td class="v" rowspan="4">Drained，<br>整區不作用</td></tr>
+      <tr><td>νu definition method</td><td><span class="ptag opt">選填</span></td><td>Direct 直接輸入 νu；或改用 Skempton B 輸入再回算 νu</td></tr>
+      <tr><td>νu,equivalent</td><td><span class="ptag opt">選填</span></td><td>預設 0.495（不可取 0.5）</td></tr>
+      <tr><td>Skempton B、Kw,ref/n</td><td><span class="ptag">自動</span></td><td>由 νu、ν′ 算出（唯讀），公式見 5.10</td></tr>
+    </table></div>
+  </div></div>
+  <div class="tabpane" id="w5"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_groundwater.png" alt="Groundwater 分頁" loading="lazy"></figure>
+    <div>
+      <p style="margin-top:0">孔隙水壓只由水位線產生時，本頁可維持預設。本專案模型乾燥（水頭在模型底以下），整頁不用動。</p>
+      <div class="tablewrap" style="margin:0"><table class="data">
+        <tr><th>項目</th><th></th><th>說明</th></tr>
+        <tr><td>Classification type、Soil class、粒徑比例</td><td><span class="ptag opt">選填</span></td><td>決定非飽和特性曲線與預設滲透係數</td></tr>
+        <tr><td>k<sub>x</sub>、k<sub>y</sub></td><td><span class="ptag opt">選填</span></td><td>滲透係數；滲流、壓密、耦合分析才需要</td></tr>
+        <tr><td>Void ratio dependency、c<sub>k</sub></td><td><span class="ptag opt">選填</span></td><td>k 隨孔隙比變化</td></tr>
+        <tr><td>−ψ<sub>unsat</sub></td><td><span class="ptag opt">選填</span></td><td>吸力上限，預設 10⁴ m（等於不設限）</td></tr>
+        <tr><td>S<sub>res</sub>、S<sub>sat</sub>、Graphs</td><td><span class="ptag">自動</span></td><td>由 Soil class 帶出，只供檢視</td></tr>
+      </table></div>
+      <p>Thermal 分頁（比熱、熱傳導、熱膨脹、凍融、水氣擴散）只有熱傳或 THM 耦合分析才用到，MC 力學分析整頁不填。</p>
+    </div>
+  </div></div>
+  <div class="tabpane" id="w6"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_interfaces.png" alt="Interfaces 分頁" loading="lazy"></figure>
+    <div>
+      <p style="margin-top:0">模型中有建立 Interface（例如襯砌與岩盤之間）才會用到；plan_e 無支撐，不用。</p>
+      <div class="tablewrap" style="margin:0"><table class="data">
+        <tr><th>項目</th><th></th><th>說明</th></tr>
+        <tr><td>Stiffness determination</td><td><span class="ptag opt">選填</span></td><td>Derived：由土層勁度推得介面勁度</td></tr>
+        <tr><td>Strength determination</td><td><span class="ptag opt">選填</span></td><td>Rigid：介面強度 = 土層強度；Manual：自訂折減</td></tr>
+        <tr><td>R<sub>inter</sub></td><td><span class="ptag">自動</span></td><td>Rigid 時固定 1.0；改 Manual 才能輸入 &lt; 1。折減的是 tanφ 與 c：\(\tan\varphi_i=R_{inter}\tan\varphi\)</td></tr>
+        <tr><td>Consider gap closure</td><td><span class="ptag opt">選填</span></td><td>介面張開後再閉合時恢復接觸勁度；預設勾選</td></tr>
+        <tr><td>Cross permeability</td><td><span class="ptag opt">選填</span></td><td>介面橫向透水性，滲流分析才需要</td></tr>
+      </table></div>
+    </div>
+  </div></div>
+  <div class="tabpane" id="w7"><div class="wintab">
+    <figure class="shot"><img src="assets/img/ch5/win_initial.png" alt="Initial 分頁" loading="lazy"></figure>
+    <div class="tablewrap" style="margin:0"><table class="data">
+      <tr><th>項目</th><th></th><th>說明</th><th>e7</th></tr>
+      <tr><td>K0 determination</td><td><span class="ptag opt">選填</span></td><td>只在初始應力採 K0 procedure 時使用。Automatic：K0 = 1 − sin φ′（Jaky）；Manual：自行輸入</td><td class="v">Manual</td></tr>
+      <tr><td>K0,x、K0,z</td><td><span class="ptag">自動</span></td><td>Automatic 時為灰色；改 Manual 才能輸入。K0,x 是面內水平，K0,z 是出平面方向</td><td class="v">0.485、0.3564</td></tr>
+    </table></div>
+  </div></div>
+
+  <h3>同一件事用 Command 指令</h3>
+  <p>上面七頁的設定，在 Commands runner 裡是一行 <code>soilmat</code> 加幾行 <code>set</code>（第 2 章有完整的指令說明）。參數名稱就是材料視窗欄位的內部名稱：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">PLAXIS Input · Commands runner</span><button class="cb-copy" type="button">複製</button></div><pre><code># MC：E 15 GPa、ν 0.24、c 1351 kPa、φ 38.8°、ψ 0、σt 289 kPa、γ 27.0
+soilmat "Identification" "Rock_MC_TC289" "SoilModel" 2 "DrainageType" "Drained" "gammaUnsat" 27.0 "gammaSat" 27.0 "nu" 0.24 "Eref" 15000000.0 "cref" 1351.0 "phi" 38.8 "psi" 0.0 "TensionCutOff" True "TensileStrength" 289.0
+# K0x 0.485（面內）、K0z ＝ ν(1＋K0x) ＝ 0.3564（出平面）
+set Rock_MC_TC289.K0Determination "Manual"
+set Rock_MC_TC289.K0PrimaryIsK0Secondary False
+set Rock_MC_TC289.K0Primary 0.485
+set Rock_MC_TC289.K0Secondary 0.3564
+# 指定給鑽孔土層
+set Soillayer_1.Soil.Material Rock_MC_TC289</code></pre></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>視窗欄位</th><th>指令名稱</th><th>說明</th></tr>
+    <tr><td>Soil model</td><td class="v">"SoilModel" 2</td><td>2 ＝ Mohr-Coulomb</td></tr>
+    <tr><td>γunsat、γsat</td><td class="v">"gammaUnsat"、"gammaSat"</td><td>kN/m³</td></tr>
+    <tr><td>E′ref、ν′</td><td class="v">"Eref"、"nu"</td><td>kN/m²</td></tr>
+    <tr><td>c′ref、φ′、ψ</td><td class="v">"cref"、"phi"、"psi"</td><td>kN/m²、°</td></tr>
+    <tr><td>Tension cut-off、Tensile strength</td><td class="v">"TensionCutOff"、"TensileStrength"</td><td>True／False、kN/m²</td></tr>
+    <tr><td>K0 determination、K0,x、K0,z</td><td class="v">K0Determination、K0Primary、K0Secondary</td><td>K0PrimaryIsK0Secondary 要設 False，K0,z 才能和 K0,x 不同</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 5.12 ============ -->
+<section class="sec" id="s12" data-num="5.12" data-short="洞室與岩體的選值">
+  <div class="sec-head"><span class="sec-num">5.12</span><h2>洞室與岩體的選值</h2></div>
+  <div class="tablewrap"><table class="data">
+    <tr><th>參數</th><th>洞室分析的選值要點</th><th>本專案 e7</th></tr>
+    <tr><td>E</td><td>開挖屬卸載，用 Eur 或岩體變形模數；E 不隨應力改變，可用 E<sub>inc</sub> 隨深度增加</td><td class="v">15 GPa</td></tr>
+    <tr><td>ν</td><td>卸載問題取 0.15–0.25。K0 = ν/(1−ν) 得不到 K0 &gt; 1，實測地應力要在初始應力階段另外指定</td><td class="v">0.24</td></tr>
+    <tr><td>c、φ</td><td>岩體可由 Hoek-Brown 換算等值 c′、φ′；換算時的應力範圍要與洞周圍壓一致</td><td class="v">1351 kPa、38.8°</td></tr>
+    <tr><td>ψ</td><td>用試驗值，或取 0.25φ 左右；MC 沒有 dilatancy cut-off</td><td class="v">0</td></tr>
+    <tr><td>σt</td><td>預設 0；岩體可依 Hoek-Brown 的 \(\sigma_t = s\,\sigma_{ci}/m_b\) 設定</td><td class="v">289 kPa</td></tr>
+    <tr><td>K0</td><td>Manual；平面應變的出平面方向 K0,z 也要給</td><td class="v">0.485、0.3564</td></tr>
+  </table></div>
+  <h3>Hoek-Brown 換算為等值 MC</h3>
+  <p>岩石的勁度可視為常數，這點 MC 適用；但強度隨圍壓呈非線性，大範圍應力下 MC 的直線包絡不夠。可以在指定的圍壓範圍 \(-\sigma_t &lt; \sigma_3' &lt; \sigma_{3,max}'\) 內做平衡擬合：</p>
+  \[ \sin\varphi' = \frac{6a\,m_b\,(s+m_b\sigma_{3n}')^{a-1}}{2(1+a)(2+a)+6a\,m_b\,(s+m_b\sigma_{3n}')^{a-1}} \]
+  \[ c' = \frac{\sigma_{ci}\left[(1+2a)s+(1-a)m_b\sigma_{3n}'\right](s+m_b\sigma_{3n}')^{a-1}}{(1+a)(2+a)\sqrt{1+\dfrac{6a\,m_b\,(s+m_b\sigma_{3n}')^{a-1}}{(1+a)(2+a)}}},\qquad \sigma_{3n}'=\frac{\sigma_{3,max}'}{\sigma_{ci}} \]
+  <p>σ′3,max 依應用而定（例如洞周的最大圍壓），擬合範圍不同得到的 c′、φ′ 也不同。用等值 MC 做 Safety 得到的安全係數，和直接用 Hoek-Brown 做 Safety 的結果不會相同。</p>
+</section>
+
+<!-- ============ 5.13 ============ -->
+<section class="sec" id="s13" data-num="5.13" data-short="輸出與強度折減">
+  <div class="sec-head"><span class="sec-num">5.13</span><h2>輸出：塑性點與強度折減</h2></div>
+  <h3>塑性點怎麼看</h3>
+  <p>Output 的 Stresses → Plastic points 顯示處於塑性狀態的應力點，畫在未變形的網格上：</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>符號</th><th>意義</th><th>MC 會出現嗎</th></tr>
+    <tr><td>紅色方塊（Failure point）</td><td>應力落在 MC 破壞包絡上</td><td>會</td></tr>
+    <tr><td>白色方塊（Tension cut-off point）</td><td>觸發 tension cut-off</td><td>會（開啟 cut-off 時）</td></tr>
+    <tr><td>藍色倒金字塔（Cap point）</td><td>正常壓密，應力等於預壓密應力</td><td>不會</td></tr>
+    <tr><td>綠色金字塔（Hardening point）</td><td>剪力硬化包絡上</td><td>不會</td></tr>
+    <tr><td>棕色菱形（Cap + Hardening）</td><td>同時在帽蓋與剪力硬化包絡上</td><td>不會</td></tr>
+  </table></div>
+  <p><b>Plastic point history</b> 顯示到目前階段為止任何一步曾經塑性的點，適合看分階開挖中塑性區怎麼擴展。直接讀 data.db 時，塑性點是積分點上的整數旗標（第 3、4 章）。</p>
+  <div class="callout pitfall"><div class="ct">初始應力後先看塑性點</div><p>K0 procedure 之後如果有很多紅色塑性點，代表 K0 偏離 1 太多，初始應力已超出降伏面，要調整 K0 或接 nil-phase；只有少量時，接一個 plastic nil-phase 即可。本專案 Ph0 算完要先確認 σv ＝ γ·深度、σh ＝ K0·σv，而且沒有塑性點。</p></div>
+
+  <h3>強度折減（Safety）</h3>
+  <div class="grid2">
+    <div class="card"><h4>做法</h4><p>逐步折減 tanφ、c 與張力強度，直到結構破壞：\(\Sigma M_{sf} = \tan\varphi_{input}/\tan\varphi_{reduced} = c_{input}/c_{reduced}\)。ψ 原則上不折減；φ 降到等於 ψ 之後，ψ 隨 φ 一起降。介面強度同樣折減，Plate、Anchor 可用 Enhanced safety 一併折減。</p></div>
+    <div class="card"><h4>判讀</h4><p>破壞機制完全發展時 FS = ΣMsf。用 Curves 確認 ΣMsf 已趨於定值；沒穩定就加大步數（預設 100 步）。需用 Arc-length control、容許誤差 ≤ 1 %（預設值即符合），網格要夠細。結果和極限平衡法的滑弧分析相近。</p></div>
+  </div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="ch4_postprocessing.html"><span class="dir">← 上一頁</span>4 · Post-Processing</a><a class="next" href="ch6_pm4sand.html"><span class="dir">下一頁 →</span>6 · PM4Sand</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 個人學習筆記</footer>
+
+<script src="assets/common.js"></script>
+<script>
+// MODEL-START
+/* Mohr-Coulomb（含 ψ、tension cut-off）應力點回傳＋元素試驗。壓為正，kPa。 */
+const MCLab = (() => {
+  const D2R = Math.PI / 180;
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  function material(P) {
+    const E = P.E, nu = P.nu;
+    const G = E / (2 * (1 + nu)), K = E / (3 * (1 - 2 * nu)), lam = K - 2 * G / 3;
+    const sp = Math.sin(P.phi * D2R), cp = Math.cos(P.phi * D2R), ss = Math.sin(P.psi * D2R);
+    const fs = [];
+    for (const [i, j] of [[0, 1], [1, 2], [2, 0]]) for (const s of [1, -1]) {
+      const a = [0, 0, 0], g = [0, 0, 0];
+      a[i] = 0.5 * s - 0.5 * sp; a[j] = -0.5 * s - 0.5 * sp;
+      g[i] = 0.5 * s - 0.5 * ss; g[j] = -0.5 * s - 0.5 * ss;
+      fs.push({ a, b: -P.c * cp, g, type: 'mc' });
+    }
+    if (P.tc) for (let i = 0; i < 3; i++) {
+      const a = [0, 0, 0]; a[i] = -1;
+      fs.push({ a, b: -P.st, g: a.slice(), type: 'tc' });
+    }
+    const De = v => { const t = lam * (v[0] + v[1] + v[2]); return [t + 2 * G * v[0], t + 2 * G * v[1], t + 2 * G * v[2]]; };
+    fs.forEach(f => { f.Dg = De(f.g); });
+    const n = fs.length;
+    const M = fs.map(fk => fs.map(fj => dot3(fk.a, fj.Dg)));
+    // 所有大小 1–3 的組合
+    const subsets = [];
+    for (let i = 0; i < n; i++) subsets.push([i]);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) subsets.push([i, j]);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) subsets.push([i, j, k]);
+    const apex = sp > 1e-9 ? -P.c * cp / sp : -Infinity;   // 等向受拉頂點 σ = −c·cotφ
+    return { P, G, K, lam, fs, M, subsets, De, apex, sp, cp };
+  }
+
+  function solve(A, b) {            // 小型線性系統（Gauss 消去，部分樞軸）
+    const n = b.length, m = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+      if (Math.abs(m[p][c]) < 1e-12) return null;
+      [m[c], m[p]] = [m[p], m[c]];
+      for (let r = 0; r < n; r++) if (r !== c) {
+        const k = m[r][c] / m[c][c];
+        for (let q = c; q <= n; q++) m[r][q] -= k * m[c][q];
+      }
+    }
+    return m.map((r, i) => r[n] / r[i]);
+  }
+
+  /* 主應力空間的回傳：彈性試算 s → 回到 f ≤ 0；多個面同時作用時用 Koiter 法則 */
+  function returnMap(mat, s) {
+    const fs = mat.fs;
+    const scale = Math.max(Math.abs(s[0]), Math.abs(s[1]), Math.abs(s[2]), mat.P.c, 1);
+    const tol = 1e-9 * scale;
+    const fv = fs.map(f => dot3(f.a, s) + f.b);
+    if (fv.every(v => v <= tol)) return { s, dep: [0, 0, 0], act: [], fmax: Math.max(...fv) };
+    let best = null;
+    for (const S of mat.subsets) {
+      if (best && S.length > best.act.length) break;
+      const A = S.map(k => S.map(j => mat.M[k][j]));
+      const dl = solve(A, S.map(k => fv[k]));
+      if (!dl || dl.some(x => x < -1e-12 * scale)) continue;
+      const r = s.slice();
+      S.forEach((j, q) => { for (let i = 0; i < 3; i++) r[i] -= dl[q] * fs[j].Dg[i]; });
+      const fr = fs.map(f => dot3(f.a, r) + f.b);
+      if (fr.every(v => v <= 1e-7 * scale)) {
+        const dep = [0, 0, 0];
+        S.forEach((j, q) => { for (let i = 0; i < 3; i++) dep[i] += dl[q] * fs[j].g[i]; });
+        best = { s: r, dep, act: S, fmax: Math.max(...fr) };
+        break;
+      }
+    }
+    if (best) return best;
+    // 落在錐頂（tension cut-off 關閉時）：直接回到頂點
+    const a = mat.apex;
+    const r = [a, a, a];
+    const de = [s[0] - a, s[1] - a, s[2] - a];        // 應力差 → 由彈性柔度換回塑性應變
+    const tr = (de[0] + de[1] + de[2]) / (9 * mat.K), dev = de.map(x => x - (de[0] + de[1] + de[2]) / 3);
+    const dep = dev.map(x => x / (2 * mat.G) + tr);
+    return { s: r, dep, act: [-1], fmax: 0 };
+  }
+
+  /* 3×3 對稱矩陣特徵分解（Jacobi） */
+  function eigSym(S) {
+    const a = S.map(r => r.slice()), V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    for (let sweep = 0; sweep < 50; sweep++) {
+      const off = Math.abs(a[0][1]) + Math.abs(a[0][2]) + Math.abs(a[1][2]);
+      if (off < 1e-14 * (Math.abs(a[0][0]) + Math.abs(a[1][1]) + Math.abs(a[2][2]) + 1e-30)) break;
+      for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+        if (Math.abs(a[p][q]) < 1e-300) continue;
+        const th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+        const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+        for (let k = 0; k < 3; k++) { const akp = a[k][p], akq = a[k][q]; a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq; }
+        for (let k = 0; k < 3; k++) { const apk = a[p][k], aqk = a[q][k]; a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk; }
+        for (let k = 0; k < 3; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; }
+      }
+    }
+    return { val: [a[0][0], a[1][1], a[2][2]], vec: V };   // vec 的第 i 欄是第 i 個特徵向量
+  }
+
+  const T = v => [[v[0], v[3], v[5]], [v[3], v[1], v[4]], [v[5], v[4], v[2]]];   // Voigt [xx,yy,zz,xy,yz,zx] → 張量
+  const Vg = t => [t[0][0], t[1][1], t[2][2], t[0][1], t[1][2], t[2][0]];
+
+  /* 一個應變增量（張量分量，剪應變為 ε 非 γ）→ 新應力；不改動輸入 */
+  function update(mat, sig, de) {
+    const tr = de[0] + de[1] + de[2];
+    const st = sig.map((x, i) => x + (i < 3 ? mat.lam * tr + 2 * mat.G * de[i] : 2 * mat.G * de[i]));
+    const e = eigSym(T(st));
+    const r = returnMap(mat, e.val);
+    if (!r.act.length) return { sig: st, dep: [0, 0, 0, 0, 0, 0], act: r.act, prin: e.val, fmax: r.fmax };
+    const V = e.vec, out = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], dp = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let k = 0; k < 3; k++) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      out[i][j] += r.s[k] * V[i][k] * V[j][k];
+      dp[i][j] += r.dep[k] * V[i][k] * V[j][k];
+    }
+    return { sig: Vg(out), dep: Vg(dp), act: r.act, prin: r.s, fmax: r.fmax };
+  }
+
+  /* 一維求根：f 單調遞增；割線＋二分 */
+  function root(f, x0, h) {
+    let a = x0, fa = f(a);
+    if (Math.abs(fa) < 1e-10) return a;
+    let step = h, b = a - Math.sign(fa) * step, fb = f(b), n = 0;
+    while (fa * fb > 0 && n < 80) { a = b; fa = fb; step *= 2; b = a - Math.sign(fa) * step; fb = f(b); n++; }
+    for (let it = 0; it < 200; it++) {
+      let x = b - fb * (b - a) / (fb - fa);
+      if (!(x > Math.min(a, b) && x < Math.max(a, b))) x = 0.5 * (a + b);
+      const fx = f(x);
+      if (Math.abs(fx) < 1e-9 || Math.abs(b - a) < 1e-16) return x;
+      if (fx * fa < 0) { b = x; fb = fx; } else { a = x; fa = fx; }
+    }
+    return 0.5 * (a + b);
+  }
+
+  /* 元素試驗。軸向 = yy。cfg.test：TXC、TXE、CU、CUE、CYC、DSS、DSSU */
+  function run(P, cfg) {
+    const mat = material(P);
+    const sv = cfg.sv0, sh = cfg.K0 * cfg.sv0;
+    let sig = [sh, sv, sh, 0, 0, 0], eps = [0, 0, 0, 0, 0, 0], u = 0, epv = 0, epq = 0;
+    const undr = ['CU', 'CUE', 'CYC'].includes(cfg.test);
+    const isDSS = cfg.test === 'DSS' || cfg.test === 'DSSU';
+    const nu = P.nu, nuu = cfg.nuu;
+    const Kwn = 3 * (nuu - nu) / ((1 - 2 * nuu) * (1 + nu)) * mat.K;
+    const N = cfg.steps, emax = cfg.emax / 100;
+    // 每一步的控制應變（軸向應變或 γ）
+    const ctrl = [];
+    if (cfg.test === 'CYC') {
+      const A = cfg.amp / 100, nc = cfg.ncyc, per = Math.max(8, Math.round(N / nc));
+      for (let k = 1; k <= per * nc; k++) { const ph = (k / per) % 1; ctrl.push(A * (ph < 0.25 ? 4 * ph : ph < 0.75 ? 2 - 4 * ph : 4 * ph - 4)); }
+    } else {
+      const sgn = (cfg.test === 'TXE' || cfg.test === 'CUE') ? -1 : 1;
+      for (let k = 1; k <= N; k++) ctrl.push(sgn * emax * k / N);
+    }
+    const rec = [];
+    const push = (x, r) => {
+      const p = (sig[0] + sig[1] + sig[2]) / 3;
+      const J2 = ((sig[0] - sig[1]) ** 2 + (sig[1] - sig[2]) ** 2 + (sig[2] - sig[0]) ** 2) / 6 + sig[3] ** 2 + sig[4] ** 2 + sig[5] ** 2;
+      const qi = Math.sqrt(3 * J2);
+      const prin = eigSym(T(sig)).val.sort((a, b) => b - a);
+      rec.push({ x, sig: sig.slice(), p, q: isDSS ? qi : sig[1] - sig[0], qi, u, pt: p + u,
+        ev: eps[0] + eps[1] + eps[2], ea: eps[1], g: 2 * eps[3], epv, epq, prin,
+        act: r ? r.act : [], fmax: r ? r.fmax : -1 });
+    };
+    push(0, null);
+    let prev = 0;
+    for (const c of ctrl) {
+      const d = c - prev; prev = c;
+      let r;
+      if (cfg.test === 'TXC' || cfg.test === 'TXE') {
+        const f = x => update(mat, sig, [x, d, x, 0, 0, 0]).sig[0] - sh;
+        const x = root(f, -nu * d, Math.abs(d) * 0.5 + 1e-12);
+        r = update(mat, sig, [x, d, x, 0, 0, 0]); eps[0] += x; eps[2] += x; eps[1] += d;
+      } else if (undr) {
+        const ev0 = eps[0] + eps[1] + eps[2];
+        const uf = dev => { const v = Kwn * (ev0 + dev); return cfg.cav ? Math.max(v, -cfg.cavs) : v; };
+        const f = x => update(mat, sig, [x, d, x, 0, 0, 0]).sig[0] + uf(d + 2 * x) - sh;
+        const x = root(f, -d / 2, Math.abs(d) * 0.5 + 1e-12);
+        r = update(mat, sig, [x, d, x, 0, 0, 0]); u = uf(d + 2 * x);
+        eps[0] += x; eps[2] += x; eps[1] += d;
+      } else if (cfg.test === 'DSS') {
+        const f = y => update(mat, sig, [0, y, 0, d / 2, 0, 0]).sig[1] - sv;
+        const y = root(f, 0, Math.abs(d) * 0.5 + 1e-12);
+        r = update(mat, sig, [0, y, 0, d / 2, 0, 0]); eps[1] += y; eps[3] += d / 2;
+      } else {        // DSSU：等體積單剪（不排水），Δu ＝ σv0 − σ′v
+        r = update(mat, sig, [0, 0, 0, d / 2, 0, 0]); eps[3] += d / 2;
+      }
+      sig = r.sig;
+      if (cfg.test === 'DSSU') u = sv - sig[1];
+      epv += r.dep[0] + r.dep[1] + r.dep[2];
+      const dm = (r.dep[0] + r.dep[1] + r.dep[2]) / 3;
+      epq += Math.sqrt(2 / 3 * ((r.dep[0] - dm) ** 2 + (r.dep[1] - dm) ** 2 + (r.dep[2] - dm) ** 2 + 2 * (r.dep[3] ** 2 + r.dep[4] ** 2 + r.dep[5] ** 2)));
+      push(c, r);
+    }
+    return { rec, mat, cfg, Kwn };
+  }
+
+  return { material, returnMap, update, run, eigSym };
+})();
+// MODEL-END
+
+/* ================= 共用：SVG 作圖 ================= */
+const PLT = (() => {
+  const nice = (span, n) => { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p; };
+  const tfmt = (v, st) => { const d = Math.max(0, -Math.floor(Math.log10(st) + 1e-9)); return Math.abs(v) < st * 1e-6 ? '0' : v.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d }); };
+  let uid = 0;
+  /* o: W,H,xr,yr,xl,yl,equal（等比例，左下角固定） */
+  function chart(svg, o) {
+    const W = o.W, H = o.H, ml = o.ml || 62, mr = 24, mt = 12, mb = 44;
+    let [x0, x1] = o.xr, [y0, y1] = o.yr;
+    if (!(x1 > x0)) x1 = x0 + 1; if (!(y1 > y0)) y1 = y0 + 1;
+    if (o.equal) {
+      const k = Math.min((W - ml - mr) / (x1 - x0), (H - mt - mb) / (y1 - y0));
+      x1 = x0 + (W - ml - mr) / k; y1 = y0 + (H - mt - mb) / k;
+    }
+    const X = x => ml + (x - x0) / (x1 - x0) * (W - ml - mr), Y = y => H - mb - (y - y0) / (y1 - y0) * (H - mt - mb);
+    const id = 'clp' + (++uid), parts = [];
+    const c = {
+      X, Y, x0, x1, y0, y1,
+      path(xs, ys, st) { let d = ''; let pen = false; for (let i = 0; i < xs.length; i++) { const a = xs[i], b = ys[i]; if (!isFinite(a) || !isFinite(b)) { pen = false; continue; } d += (pen ? 'L' : 'M') + X(a).toFixed(1) + ' ' + Y(b).toFixed(1); pen = true; } if (d) parts.push(`<path d="${d}" style="fill:none;${st}"/>`); },
+      raw(s) { parts.push(s); },
+      dot(x, y, st, r = 4.5) { if (isFinite(x) && isFinite(y)) parts.push(`<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="${r}" style="${st}"/>`); },
+      text(x, y, s, st = '', anchor = 'start') { parts.push(`<text x="${X(x).toFixed(1)}" y="${Y(y).toFixed(1)}" text-anchor="${anchor}" style="font-size:12px;${st}">${s}</text>`); },
+      done() {
+        const sx = nice(x1 - x0, 5), sy = nice(y1 - y0, 5), tk = [];
+        for (let v = Math.ceil(x0 / sx) * sx; v <= x1 + sx * 1e-9; v += sx) {
+          const px = X(v).toFixed(1);
+          tk.push(`<line class="tick" x1="${px}" y1="${H - mb}" x2="${px}" y2="${H - mb - 5}"/><line class="tick" x1="${px}" y1="${mt}" x2="${px}" y2="${mt + 5}"/><text class="tick-label" x="${px}" y="${H - mb + 17}" text-anchor="middle">${tfmt(v, sx)}</text>`);
+        }
+        for (let v = Math.ceil(y0 / sy) * sy; v <= y1 + sy * 1e-9; v += sy) {
+          const py = Y(v).toFixed(1);
+          tk.push(`<line class="tick" x1="${ml}" y1="${py}" x2="${ml + 5}" y2="${py}"/><line class="tick" x1="${W - mr}" y1="${py}" x2="${W - mr - 5}" y2="${py}"/><text class="tick-label" x="${ml - 7}" y="${(+py + 4).toFixed(1)}" text-anchor="end">${tfmt(v, sy)}</text>`);
+        }
+        const zero = (y0 < 0 && y1 > 0) ? `<line x1="${ml}" x2="${W - mr}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--line);stroke-width:1"/>` : '';
+        const zerox = (x0 < 0 && x1 > 0) ? `<line y1="${mt}" y2="${H - mb}" x1="${X(0)}" x2="${X(0)}" style="stroke:var(--line);stroke-width:1"/>` : '';
+        svg.innerHTML = `<defs><clipPath id="${id}"><rect x="${ml}" y="${mt}" width="${W - ml - mr}" height="${H - mt - mb}"/></clipPath></defs>`
+          + zero + zerox + `<g clip-path="url(#${id})">${parts.join('')}</g>`
+          + `<rect class="axis-frame" x="${ml}" y="${mt}" width="${W - ml - mr}" height="${H - mt - mb}"/>` + tk.join('')
+          + `<text class="axis-label" x="${(ml + W - mr) / 2}" y="${H - 8}" text-anchor="middle">${o.xl}</text>`
+          + `<text class="axis-label" transform="translate(15 ${(mt + H - mb) / 2}) rotate(-90)" text-anchor="middle">${o.yl}</text>`;
+      }
+    };
+    return c;
+  }
+  function range(arrs, pad = 0.08, incl = []) {
+    let lo = Infinity, hi = -Infinity;
+    arrs.forEach(a => a.forEach(v => { if (isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } }));
+    incl.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (hi - lo < 1e-12) { const m = Math.abs(hi) || 1; lo -= 0.1 * m; hi += 0.1 * m; }
+    const d = (hi - lo) * pad; return [lo - d, hi + d];
+  }
+  return { chart, range };
+})();
+
+/* ================= 5.6 元素試驗室 ================= */
+(() => {
+  const $ = id => document.getElementById(id);
+  const D2R = Math.PI / 180;
+  const fmt = (x, d = 0) => !isFinite(x) ? '—' : (Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x).toLocaleString('zh-TW', { maximumFractionDigits: d, minimumFractionDigits: d });
+  const BLUE = 'stroke:var(--blue);stroke-width:2', GHOST = 'stroke:var(--gray);stroke-width:1.6',
+    INK = 'stroke:var(--ink);stroke-width:1.3', INKD = 'stroke:var(--ink);stroke-width:1.2;stroke-dasharray:6 4',
+    TCL = 'stroke:var(--red);stroke-width:1.3;stroke-dasharray:5 4', TOT = 'stroke:var(--gray);stroke-width:1.4;stroke-dasharray:5 4',
+    PT = 'fill:var(--red);stroke:var(--bg);stroke-width:1.5';
+  const TESTS = { TXC: '排水三軸壓縮', TXE: '排水三軸伸張', CU: '不排水三軸壓縮', CUE: '不排水三軸伸張', CYC: '不排水循環三軸', DSS: '排水單剪', DSSU: '等體積單剪' };
+  const SOIL = { E: 20, nu: 0.3, c: 0, phi: 30, psi: 0, tc: true, st: 0 };
+  const ROCK = { E: 15000, nu: 0.24, c: 1351, phi: 38.8, psi: 0, tc: true, st: 289 };
+  const PRE = [
+    { n: '排水三軸 ψ = 0', m: SOIL, t: { test: 'TXC', sv: 100, k0: 1, emax: 5 }, note: '降伏後 q 持平；εv 在降伏後變成水平線——塑性流動不改變體積。' },
+    { n: 'ψ = φ（關聯流動）', m: { ...SOIL, psi: 30 }, t: { test: 'TXC', sv: 100, k0: 1, emax: 5 }, ghost: { m: SOIL }, note: '強度和 ψ = 0（灰）完全一樣，但體積一路膨脹：每 1 % 軸向塑性應變帶來 2 % 的體積膨脹，而且不會停。' },
+    { n: '不排水 ψ = 0', m: SOIL, t: { test: 'CU', sv: 100, k0: 1, emax: 5 }, note: '有效應力路徑垂直上升（p′ 幾乎不變），碰到破壞線就停；灰色虛線是總應力路徑，兩者水平距離就是超額孔壓。' },
+    { n: '不排水 ψ > 0：強度無上限', m: { ...SOIL, psi: 10 }, t: { test: 'CU', sv: 100, k0: 1, emax: 10 }, ghost: { m: SOIL }, note: '碰到破壞線後沿線一直往上爬，孔壓持續下降。真實的砂會在臨界狀態停下，MC 不會。' },
+    { n: '加 cavitation cut-off', m: { ...SOIL, psi: 10 }, t: { test: 'CU', sv: 100, k0: 1, emax: 10, cav: true }, ghost: { m: { ...SOIL, psi: 10 }, t: { cav: false } }, note: '超額孔壓到 −100 kPa 後不再下降，之後等同排水剪動，強度停止上升。PLAXIS 的 Undrained (A) 配 ψ > 0 一定要開。' },
+    { n: '壓縮 vs 伸張', m: SOIL, t: { test: 'TXE', sv: 100, k0: 1, emax: 5 }, ghost: { t: { test: 'TXC' } }, note: '伸張的 |q| 只有壓縮的 (3 − sinφ)/(3 + sinφ) = 0.714 倍；π 平面上停在離軸較近的伸張角。' },
+    { n: '單剪 DSS', m: SOIL, t: { test: 'DSS', sv: 100, k0: 0.5, emax: 10 }, ghost: { m: { ...SOIL, psi: 30 } }, note: 'τ/σ′v 停在 sinφ cosψ/(1 − sinφ sinψ)：ψ = 0 為 0.5，ψ = φ（灰）為 tanφ = 0.577。p′–q 圖上終點落在壓縮線與伸張線之間。' },
+    { n: '不排水循環：孔壓不累積', m: SOIL, t: { test: 'CYC', sv: 100, k0: 1, amp: 0.8, ncyc: 3 }, note: '每一圈都撞到壓縮線與伸張線，但 p′ 始終不變，超額孔壓不會一圈一圈累積——MC 算不出液化。' },
+    { n: '岩體 e7：伸張遇張力截斷', m: ROCK, t: { test: 'TXE', sv: 500, k0: 1, emax: 0.05 }, ghost: { m: { ...ROCK, tc: false } }, note: '軸向應力降到 −289 kPa 就停（張力截斷）；灰色是關閉張力截斷的結果，要到 −1.18 MPa 才碰到 MC 伸張角。' },
+    { n: '岩體 e7：三軸壓縮 σ′3 = 2 MPa', m: ROCK, t: { test: 'TXC', sv: 2000, k0: 1, emax: 0.3 }, note: 'q_f ＝ (Nφ − 1)σ′3 ＋ 2c√Nφ ＝ 12.35 MPa。岩體 E 大，0.08 % 應變就破壞。' }
+  ];
+  const inputs = ['t_test', 't_sv', 't_k0', 't_emax', 't_amp', 't_ncyc', 't_nuu', 't_cav', 'm_E', 'm_nu', 'm_c', 'm_phi', 'm_psi', 'm_tc', 'm_st'];
+  const S = { res: null, ghost: null, idx: 0, playing: false, note: '' };
+
+  function setVals(m, t) {
+    const base = { test: 'TXC', sv: 100, k0: 1, emax: 5, amp: 0.8, ncyc: 3, nuu: 0.495, cav: false };
+    t = { ...base, ...t };
+    $('t_test').value = t.test; $('t_sv').value = t.sv; $('t_k0').value = t.k0; $('t_emax').value = t.emax;
+    $('t_amp').value = t.amp; $('t_ncyc').value = t.ncyc; $('t_nuu').value = t.nuu; $('t_cav').checked = t.cav;
+    $('m_E').value = m.E; $('m_nu').value = m.nu; $('m_c').value = m.c; $('m_phi').value = m.phi; $('m_psi').value = m.psi;
+    $('m_tc').checked = m.tc; $('m_st').value = m.st;
+  }
+  function read() {
+    const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+    const phi = num('m_phi', 30); let psi = num('m_psi', 0);
+    if (psi > phi) { psi = phi; $('m_psi').value = phi; }
+    const P = { E: Math.max(0.01, num('m_E', 20)) * 1000, nu: num('m_nu', 0.3), c: Math.max(0, num('m_c', 0)), phi, psi, tc: $('m_tc').checked, st: Math.max(0, num('m_st', 0)) };
+    const test = $('t_test').value;
+    const cfg = { test, sv0: Math.max(0.1, num('t_sv', 100)), K0: num('t_k0', 1), emax: Math.max(0.001, num('t_emax', 5)), steps: 400,
+      amp: Math.max(0.001, num('t_amp', 0.8)), ncyc: Math.min(20, Math.max(1, Math.round(num('t_ncyc', 3)))), nuu: num('t_nuu', 0.495), cav: $('t_cav').checked, cavs: 100 };
+    if (test === 'CYC') cfg.steps = 160 * cfg.ncyc;
+    return { P, cfg };
+  }
+  function syncUI() {
+    const t = $('t_test').value, und = ['CU', 'CUE', 'CYC'].includes(t);
+    document.querySelectorAll('#lab [data-und]').forEach(e => e.classList.toggle('hidden', !und));
+    document.querySelectorAll('#lab [data-cyc]').forEach(e => e.classList.toggle('hidden', t !== 'CYC'));
+    document.querySelectorAll('#lab [data-mono]').forEach(e => e.classList.toggle('hidden', t === 'CYC'));
+    $('m_st').disabled = !$('m_tc').checked;
+    $('o_k0').textContent = (+$('t_k0').value).toFixed(2); $('o_nuu').textContent = (+$('t_nuu').value).toFixed(3);
+    $('o_nu').textContent = (+$('m_nu').value).toFixed(2); $('o_phi').textContent = (+$('m_phi').value).toFixed(1) + '°'; $('o_psi').textContent = (+$('m_psi').value).toFixed(1) + '°';
+    document.querySelectorAll('#lab input[type=range]').forEach(r => { if (r.id === 'scrub') return; r.style.setProperty('--pct', ((r.value - r.min) / (r.max - r.min) * 100) + '%'); });
+  }
+  function run(keepIdx) {
+    syncUI();
+    const { P, cfg } = read();
+    S.res = MCLab.run(P, cfg); S.res.P = P;
+    const n = S.res.rec.length - 1;
+    $('scrub').max = n;
+    S.idx = keepIdx ? Math.min(S.idx, n) : n;
+    $('scrub').value = S.idx;
+    draw();
+  }
+  const isDSS = r => r.cfg.test === 'DSS' || r.cfg.test === 'DSSU';
+  const isUnd = r => ['CU', 'CUE', 'CYC', 'DSSU'].includes(r.cfg.test);
+  const xOf = r => r.rec.map(s => (isDSS(r) ? s.g : s.ea) * 100);
+  const ssOf = r => r.rec.map(s => isDSS(r) ? s.sig[3] : s.q);
+  const volOf = r => r.rec.map(s => isUnd(r) ? s.u : s.ev * 100);
+
+  function stateOf(s, mat) {
+    if (!s.act.length) return ['彈性', 'el'];
+    if (s.act[0] === -1) return ['錐頂（apex）', 'pl'];
+    const nm = s.act.filter(k => mat.fs[k].type === 'mc').length, nt = s.act.length - nm;
+    if (nt && !nm) return ['張力截斷', 'tc'];
+    if (nt && nm) return ['MC＋張力截斷', 'tc'];
+    return [nm === 1 ? 'MC 破壞面' : nm === 2 ? 'MC 角點（兩面）' : 'MC 角點（三面）', 'pl'];
+  }
+
+  function draw() {
+    const r = S.res, g = S.ghost, i = S.idx, s = r.rec[i], P = r.P;
+    const sp = Math.sin(P.phi * D2R), cp = Math.cos(P.phi * D2R);
+    const dss = isDSS(r), und = isUnd(r);
+    $('pos').textContent = `第 ${i} / ${r.rec.length - 1} 步　${dss ? 'γ' : 'εa'} = ${fmt(xOf(r)[i], 3)} %`;
+    const sub = (arr) => arr.slice(0, i + 1);
+    // ---------- p′–q ----------
+    {
+      const ps = r.rec.map(x => x.p), qs = r.rec.map(x => x.q), pts = r.rec.map(x => x.pt);
+      const gp = g ? g.res.rec.map(x => x.p) : [], gq = g ? g.res.rec.map(x => x.q) : [];
+      const xr = PLT.range([ps, gp, und ? pts : []], 0.1, [0]);
+      const yr = PLT.range([qs, gq], 0.12, [0]);
+      if (P.tc && P.c > 0) xr[0] = Math.min(xr[0], -P.st - 0.05 * (xr[1] - xr[0]));
+      const ch = PLT.chart($('g_pq'), { W: 400, H: 310, xr, yr, xl: 'p′ (kPa)', yl: dss ? 'q = √(3J₂) (kPa)' : 'q = σ′a − σ′r (kPa)' });
+      const N = 160, pp = [], qc = [], qe = [], tc1 = [], tc2 = [];
+      for (let k = 0; k <= N; k++) {
+        const p = ch.x0 + (ch.x1 - ch.x0) * k / N, base = P.c * cp + p * sp;
+        pp.push(p);
+        qc.push(base >= 0 ? 6 * base / (3 - sp) : NaN); qe.push(base >= 0 ? 6 * base / (3 + sp) * (dss ? 1 : -1) : NaN);
+        tc1.push(p + P.st >= 0 ? 3 * (p + P.st) : NaN); tc2.push(p + P.st >= 0 ? -1.5 * (p + P.st) : NaN);
+      }
+      ch.path(pp, qc, INK); ch.path(pp, qe, dss ? INKD : INK);
+      if (P.tc && !dss) { ch.path(pp, tc1, TCL); ch.path(pp, tc2, TCL); }
+      if (g) ch.path(gp, gq, GHOST);
+      if (und) ch.path(sub(pts), sub(qs), TOT);
+      ch.path(ps, qs, 'stroke:var(--blue);stroke-width:2;opacity:.25');
+      ch.path(sub(ps), sub(qs), BLUE);
+      ch.dot(s.p, s.q, PT);
+      const lx = ch.x0 + 0.62 * (ch.x1 - ch.x0), lb = P.c * cp + lx * sp;
+      if (lb > 0) {
+        const yc = 6 * lb / (3 - sp);
+        if (yc > ch.y0 && yc < ch.y1 - 0.06 * (ch.y1 - ch.y0)) ch.text(lx, yc + 0.03 * (ch.y1 - ch.y0), '三軸壓縮', 'fill:var(--ink)', 'end');
+        const ye = 6 * lb / (3 + sp) * (dss ? 1 : -1);
+        if (ye > ch.y0 && ye < ch.y1) ch.text(lx + 0.2 * (ch.x1 - ch.x0), ye * 1.0 + (dss ? -0.04 : 0.04) * (ch.y1 - ch.y0), '三軸伸張', 'fill:var(--ink)', 'end');
+      }
+      ch.done();
+      $('cap_pq').textContent = und ? '（藍：有效應力；灰虛線：總應力）' : '';
+    }
+    // ---------- 應力–應變 ----------
+    {
+      const xs = xOf(r), ys = ssOf(r), gx = g ? xOf(g.res) : [], gy = g ? ssOf(g.res) : [];
+      const ch = PLT.chart($('g_ss'), { W: 400, H: 310, xr: PLT.range([xs, gx], 0.04, [0]), yr: PLT.range([ys, gy], 0.1, [0]),
+        xl: dss ? 'γ (%)' : 'εa (%)', yl: dss ? 'τxy (kPa)' : 'q (kPa)' });
+      if (g) ch.path(gx, gy, GHOST);
+      ch.path(xs, ys, 'stroke:var(--blue);stroke-width:2;opacity:.25'); ch.path(sub(xs), sub(ys), BLUE); ch.dot(xs[i], ys[i], PT); ch.done();
+      $('cap_ss').textContent = dss ? '應力–應變 τxy–γ' : '應力–應變 q–εa';
+    }
+    // ---------- 體積或孔壓 ----------
+    {
+      const xs = xOf(r), ys = volOf(r);
+      const gok = g && isUnd(g.res) === und, gx = gok ? xOf(g.res) : [], gy = gok ? volOf(g.res) : [];
+      const ch = PLT.chart($('g_vol'), { W: 400, H: 310, xr: PLT.range([xs, gx], 0.04, [0]), yr: PLT.range([ys, gy], 0.12, [0]),
+        xl: dss ? 'γ (%)' : 'εa (%)', yl: und ? 'Δu (kPa)' : 'εv (%)，壓縮為正' });
+      if (gok) ch.path(gx, gy, GHOST);
+      ch.path(xs, ys, 'stroke:var(--blue);stroke-width:2;opacity:.25'); ch.path(sub(xs), sub(ys), BLUE); ch.dot(xs[i], ys[i], PT); ch.done();
+      $('cap_vol').textContent = und ? '超額孔隙水壓 Δu' : '體積應變 εv（負值 ＝ 膨脹）';
+    }
+    drawPi(r, i); drawMohr(r, i);
+    // ---------- 讀值 ----------
+    const [stxt, scls] = stateOf(s, r.mat);
+    const t = (s.prin[0] - s.prin[2]) / 2, c0 = (s.prin[0] + s.prin[2]) / 2, cap = c0 * sp + P.c * cp;
+    const cells = [
+      ['狀態', `<span class="state ${scls}">${stxt}</span>`],
+      ['p′ (kPa)', fmt(s.p, 1)], [dss ? 'q (kPa)' : 'q ＝ σ′a − σ′r (kPa)', fmt(s.q, 1)],
+      ['σ′1 ／ σ′3 (kPa)', fmt(s.prin[0], 0) + ' ／ ' + fmt(s.prin[2], 0)],
+      ['強度發揮度 t／(s sinφ + c cosφ)', cap > 0 ? fmt(t / cap * 100, 1) + ' %' : '—'],
+      [und ? 'Δu (kPa)' : 'εv (%)', und ? fmt(s.u, 1) : fmt(s.ev * 100, 3)],
+      ['累積塑性體積應變 εvp (%)', fmt(s.epv * 100, 3)]
+    ];
+    $('stats').innerHTML = cells.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    $('note').innerHTML = (S.note ? S.note + ' ' : '') + (und ? `不排水：水的等效體積模數 Kw/n ＝ ${fmt(r.Kwn / 1000, 1)} MPa（νu ${r.cfg.nuu}）。` : '');
+  }
+
+  // π 平面：TX 用 (σ′x, σ′y=軸向, σ′z)；DSS 用排序後的主應力
+  function drawPi(r, i) {
+    const svg = $('g_pi'), W = 400, H = 330, cx = 200, cy = 160, P = r.P;
+    const sp = Math.sin(P.phi * D2R), cp = Math.cos(P.phi * D2R), k = Math.sqrt(2 / 3);
+    const E = [[0, 1], [-Math.cos(Math.PI / 6), -0.5], [Math.cos(Math.PI / 6), -0.5]];   // 上、左下、右下
+    const dss = isDSS(r);
+    const trip = s => dss ? s.prin.slice() : [s.sig[1], s.sig[0], s.sig[2]];
+    const proj = t => [k * (t[0] * E[0][0] + t[1] * E[1][0] + t[2] * E[2][0]), k * (t[0] * E[0][1] + t[1] * E[1][1] + t[2] * E[2][1])];
+    const s = r.rec[i], p = s.p, base = P.c * cp + p * sp;
+    const rc = base > 0 ? k * 6 * base / (3 - sp) : 0, re = base > 0 ? k * 6 * base / (3 + sp) : 0;
+    let poly = [];
+    for (let j = 0; j < 6; j++) {         // 角度 90°（壓縮 a）起，每 60° 交替壓縮／伸張
+      const ang = (90 + 60 * j) * D2R, rr = j % 2 === 0 ? rc : re;
+      poly.push([rr * Math.cos(ang), rr * Math.sin(ang)]);
+    }
+    if (P.tc) {                            // σ_i ≥ −σt ⇒ P·e_i ≥ −(σt + p)√(3/2)
+      const lim = -(P.st + p) * Math.sqrt(1.5);
+      for (const e of E) {
+        const inside = q => q[0] * e[0] + q[1] * e[1] >= lim - 1e-9, out = [];
+        for (let j = 0; j < poly.length; j++) {
+          const A = poly[j], B = poly[(j + 1) % poly.length], ia = inside(A), ib = inside(B);
+          if (ia) out.push(A);
+          if (ia !== ib) { const da = A[0] * e[0] + A[1] * e[1] - lim, db = B[0] * e[0] + B[1] * e[1] - lim, t = da / (da - db); out.push([A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])]); }
+        }
+        poly = out;
+      }
+    }
+    const path = r.rec.slice(0, i + 1).map(x => proj(trip(x)));
+    const gpath = S.ghost ? S.ghost.res.rec.map(x => proj((isDSS(S.ghost.res) ? x.prin.slice() : [x.sig[1], x.sig[0], x.sig[2]]))) : [];
+    let R = Math.max(rc, 1e-9);
+    path.concat(gpath).forEach(q => { R = Math.max(R, Math.hypot(q[0], q[1])); });
+    const sc = 118 / (R * 1.08);
+    const X = q => (cx + q[0] * sc).toFixed(1), Y = q => (cy - q[1] * sc).toFixed(1);
+    const lab = dss ? ['σ′1', 'σ′2', 'σ′3'] : ['σ′a（y）', 'σ′r（x）', 'σ′r（z）'];
+    let h = '';
+    E.forEach((e, j) => {
+      h += `<line x1="${cx}" y1="${cy}" x2="${(cx + e[0] * 136).toFixed(1)}" y2="${(cy - e[1] * 136).toFixed(1)}" style="stroke:var(--line);stroke-width:1"/>`;
+      h += `<line x1="${cx}" y1="${cy}" x2="${(cx - e[0] * 136).toFixed(1)}" y2="${(cy + e[1] * 136).toFixed(1)}" style="stroke:var(--line);stroke-width:1;stroke-dasharray:3 4"/>`;
+      h += `<text x="${(cx + e[0] * 150).toFixed(1)}" y="${(cy - e[1] * 150 + 4).toFixed(1)}" text-anchor="middle" style="font-size:12.5px;fill:var(--muted)">${lab[j]}</text>`;
+    });
+    if (poly.length) h += `<polygon points="${poly.map(q => X(q) + ',' + Y(q)).join(' ')}" style="fill:var(--accent-soft);stroke:var(--ink);stroke-width:1.4"/>`;
+    if (gpath.length) h += `<polyline points="${gpath.map(q => X(q) + ',' + Y(q)).join(' ')}" style="fill:none;stroke:var(--gray);stroke-width:1.5"/>`;
+    h += `<polyline points="${path.map(q => X(q) + ',' + Y(q)).join(' ')}" style="fill:none;stroke:var(--blue);stroke-width:2"/>`;
+    const q = path[path.length - 1];
+    h += `<circle cx="${X(q)}" cy="${Y(q)}" r="5" style="fill:var(--red);stroke:var(--bg);stroke-width:1.5"/>`;
+    h += `<text x="8" y="${H - 26}" style="font-size:11.5px;fill:var(--muted)">六角形：p′ ＝ ${fmt(p, 0)} kPa 的 MC 截面${P.tc ? '（已扣張力截斷）' : ''}</text>`;
+    h += `<text x="8" y="${H - 9}" style="font-size:11.5px;fill:var(--muted)">實線軸：壓縮角方向；虛線軸：伸張角方向</text>`;
+    svg.innerHTML = h;
+  }
+
+  function drawMohr(r, i) {
+    const s = r.rec[i], P = r.P, [s1, s2, s3] = s.prin;
+    const tn = Math.tan(P.phi * D2R), apex = tn > 1e-9 ? -P.c / tn : -Infinity;
+    let lo = Math.min(s3, 0), hi = Math.max(s1, 1);
+    if (P.tc) lo = Math.min(lo, -P.st); else if (isFinite(apex)) lo = Math.min(lo, Math.max(apex, -0.6 * (hi - lo)));
+    const span = hi - lo; lo -= 0.06 * span; hi += 0.06 * span;
+    const tt = (s1 - s3) / 2, env3 = P.c + Math.max(s3, isFinite(apex) ? apex : s3) * tn;
+    const ytop = Math.max(1.3 * tt, Math.min(1.15 * env3, 6 * tt + 1)) + 1e-6;
+    const ch = PLT.chart($('g_mohr'), { W: 640, H: 330, xr: [lo, hi], yr: [0, ytop], xl: 'σn (kPa)', yl: 'τ (kPa)', equal: true });
+    const xa = Math.max(isFinite(apex) ? apex : ch.x0, P.tc ? -P.st : -Infinity, ch.x0);
+    ch.path([xa, ch.x1], [P.c + xa * tn, P.c + ch.x1 * tn], 'stroke:var(--ink);stroke-width:1.6');
+    if (P.tc) ch.path([-P.st, -P.st], [0, Math.max(0, P.c - P.st * tn)], 'stroke:var(--red);stroke-width:1.6;stroke-dasharray:5 4');
+    const circ = (a, b, st) => { const c = (a + b) / 2, rr = Math.abs(a - b) / 2, xs = [], ys = []; for (let k = 0; k <= 90; k++) { const t = Math.PI * k / 90; xs.push(c + rr * Math.cos(t)); ys.push(rr * Math.sin(t)); } ch.path(xs, ys, st); };
+    circ(s1, s2, 'stroke:var(--gray);stroke-width:1.2'); circ(s2, s3, 'stroke:var(--gray);stroke-width:1.2');
+    circ(s1, s3, BLUE);
+    [s1, s2, s3].forEach(v => ch.dot(v, 0, 'fill:var(--blue)', 3.5));
+    ch.text(ch.x1 - 0.01 * (ch.x1 - ch.x0), P.c + ch.x1 * tn - 0.0 * (ch.y1 - ch.y0), 'τ ＝ c + σn tanφ', 'fill:var(--ink)', 'end');
+    ch.done();
+  }
+
+  // ---------- 事件 ----------
+  const box = $('presets');
+  PRE.forEach((pr, j) => {
+    const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = pr.n;
+    b.addEventListener('click', () => {
+      box.querySelectorAll('.btn').forEach(x => x.classList.remove('on')); b.classList.add('on');
+      stop();
+      if (pr.ghost) {
+        const gm = { ...pr.m, ...(pr.ghost.m || {}) }, gt = { ...pr.t, ...(pr.ghost.t || {}) };
+        setVals(gm, gt); run(); S.ghost = { res: S.res, label: describe() };
+      } else S.ghost = null;
+      setVals(pr.m, pr.t); S.note = pr.note; run();
+      $('ghostlbl').textContent = S.ghost ? '對照：' + S.ghost.label : '';
+    });
+    box.appendChild(b);
+  });
+  function describe() { const { P, cfg } = read(); return `${TESTS[cfg.test]}，φ ${P.phi}°、ψ ${P.psi}°、c ${P.c}${P.tc ? '、σt ' + P.st : '、無張力截斷'}${cfg.cav ? '、cavitation' : ''}`; }
+  inputs.forEach(id => $(id).addEventListener('input', () => { S.note = ''; box.querySelectorAll('.btn').forEach(x => x.classList.remove('on')); run(true); }));
+  $('scrub').addEventListener('input', () => { S.idx = +$('scrub').value; draw(); });
+  $('b_ghost').addEventListener('click', () => { S.ghost = { res: S.res, label: describe() }; $('ghostlbl').textContent = '對照：' + S.ghost.label; draw(); });
+  $('b_clear').addEventListener('click', () => { S.ghost = null; $('ghostlbl').textContent = ''; draw(); });
+  let raf = 0;
+  function stop() { S.playing = false; cancelAnimationFrame(raf); $('b_play').textContent = '▶ 播放'; }
+  $('b_play').addEventListener('click', () => {
+    if (S.playing) return stop();
+    const n = S.res.rec.length - 1;
+    if (S.idx >= n) S.idx = 0;
+    S.playing = true; $('b_play').textContent = '❚❚ 暫停';
+    const per = Math.max(1, Math.round(n / 240));
+    const tick = () => { S.idx = Math.min(n, S.idx + per); $('scrub').value = S.idx; draw(); if (S.idx >= n) return stop(); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+  });
+  box.querySelector('.btn').click();
+})();
+
+/* ================= 5.7 Mohr 圓試算 ================= */
+(() => {
+  const P = { c: 1351, phi: 38.8, st: 289, s3: 2000, s1: 9000 };
+  const fmt = (x, d = 0) => !isFinite(x) ? '—' : (Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x).toLocaleString('zh-TW', { maximumFractionDigits: d, minimumFractionDigits: d });
+  const D2R = Math.PI / 180;
+  function draw() {
+    const c = Math.max(0, P.c), phi = Math.min(Math.max(P.phi, 0), 89) * D2R, st = Math.max(0, P.st);
+    const s1 = Math.max(P.s1, P.s3), s3 = Math.min(P.s1, P.s3);
+    const sn = Math.sin(phi), cs = Math.cos(phi), tn = Math.tan(phi), N = (1 + sn) / (1 - sn);
+    const s = (s1 + s3) / 2, t = (s1 - s3) / 2, f = t - s * sn - c * cs, cap = s * sn + c * cs;
+    const s1f = N * s3 + 2 * c * Math.sqrt(N), apex = phi > 1e-6 ? -c / tn : -Infinity;
+    const state = s3 < -st - 1e-9 ? 'tc' : (f >= -1e-9 ? 'pl' : 'el');
+    let lo = Math.min(s3, -st, 0), hi = Math.max(s1, s1f, 1);
+    const span = hi - lo; lo -= 0.06 * span; hi += 0.05 * span;
+    const ch = PLT.chart(document.getElementById('mohr'), { W: 640, H: 330, xr: [lo, hi], yr: [0, Math.max(t, (s1f - s3) / 2, c, 1) * 1.25], xl: 'σn (kPa，壓為正)', yl: 'τ (kPa)', equal: true });
+    ch.raw(`<rect x="${ch.X(ch.x0)}" y="${ch.Y(ch.y1)}" width="${Math.max(0, ch.X(-st) - ch.X(ch.x0))}" height="${ch.Y(0) - ch.Y(ch.y1)}" style="fill:var(--pband);opacity:.45"/>`);
+    const xa = Math.max(isFinite(apex) ? apex : ch.x0, -st);
+    ch.path([xa, ch.x1], [c + xa * tn, c + ch.x1 * tn], 'stroke:var(--ink);stroke-width:1.8');
+    if (isFinite(apex) && apex < -st) ch.path([Math.max(apex, ch.x0), -st], [c + Math.max(apex, ch.x0) * tn, c - st * tn], 'stroke:var(--ink);stroke-width:1.1;stroke-dasharray:4 3');
+    ch.path([-st, -st], [0, Math.max(0, c - st * tn)], 'stroke:var(--red);stroke-width:1.8');
+    const circ = (a, b, st2) => { const cc = (a + b) / 2, rr = Math.abs(a - b) / 2, xs = [], ys = []; for (let k = 0; k <= 120; k++) { const th = Math.PI * k / 120; xs.push(cc + rr * Math.cos(th)); ys.push(rr * Math.sin(th)); } ch.path(xs, ys, st2); };
+    circ(s3, s1f, 'stroke:var(--gray);stroke-width:1.3;stroke-dasharray:5 4');
+    const col = state === 'el' ? 'var(--blue)' : state === 'pl' ? 'var(--red)' : 'var(--orange)';
+    circ(s3, s1, `stroke:${col};stroke-width:2.2`);
+    ch.dot(s3, 0, `fill:${col}`, 3.5); ch.dot(s1, 0, `fill:${col}`, 3.5);
+    ch.text(-st, (ch.y1 - ch.y0) * 0.04, '−σt', 'fill:var(--red)', 'end');
+    ch.text(ch.x1 - 0.02 * (ch.x1 - ch.x0), ch.y1 - 0.07 * (ch.y1 - ch.y0), '灰虛線：同一 σ′3 下的破壞圓', 'fill:var(--muted)', 'end');
+    ch.done();
+    const el = document.getElementById('mstate');
+    el.className = 'state ' + state;
+    el.textContent = state === 'tc' ? '受拉超過 σt：觸發 tension cut-off' : state === 'pl' ? '達到或超出降伏面：f ≥ 0，PLAXIS 會回傳到面上' : '彈性：f < 0';
+    const Mc = 6 * sn / (3 - sn), Me = 6 * sn / (3 + sn);
+    const rows = [
+      ['f ＝ t − s·sinφ − c·cosφ', fmt(f) + ' kPa'],
+      ['強度發揮度 t／(s·sinφ + c·cosφ)', cap > 0 ? fmt(t / cap * 100, 1) + ' %' : '—'],
+      ['Nφ ＝ (1 + sinφ)／(1 − sinφ)', fmt(N, 3)],
+      ['同一 σ′3 下的破壞 σ′1f ＝ Nφσ′3 + 2c√Nφ', fmt(s1f) + ' kPa'],
+      ['單軸抗壓強度 2c√Nφ', fmt(2 * c * Math.sqrt(N)) + ' kPa'],
+      ['MC 隱含的單軸抗拉強度 2c·cosφ／(1 + sinφ)', fmt(2 * c * cs / (1 + sn)) + ' kPa'],
+      ['錐頂 −c·cotφ', isFinite(apex) ? fmt(apex) + ' kPa' : '—'],
+      ['Mc ／ Me ／ re/rc', fmt(Mc, 3) + ' ／ ' + fmt(Me, 3) + ' ／ ' + fmt((3 - sn) / (3 + sn), 3)]
+    ];
+    document.getElementById('readout').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  }
+  ['c', 'phi', 'st', 's3', 's1'].forEach(k => {
+    const r = document.getElementById('r_' + k), n = document.getElementById('n_' + k);
+    const pct = () => r.style.setProperty('--pct', ((r.value - r.min) / (r.max - r.min) * 100) + '%');
+    r.value = P[k]; n.value = P[k]; pct();
+    r.addEventListener('input', () => { P[k] = parseFloat(r.value); n.value = r.value; pct(); draw(); });
+    n.addEventListener('input', () => { const v = parseFloat(n.value); if (isFinite(v)) { P[k] = v; r.value = v; pct(); draw(); } });
+  });
+  draw();
+})();
+
+/* ================= 5.11 分頁 ================= */
+document.querySelectorAll('#wtabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#wtabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('#s11 .tabpane').forEach(p => p.classList.toggle('on', p.id === b.dataset.t));
+}));
+</script>
+</body>
+</html>

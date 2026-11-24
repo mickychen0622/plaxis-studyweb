@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>③ 網格 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c3" data-root="../" data-title="3 · ③ 網格">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ③ · 3 張表</div>
+  <h1>網格</h1>
+  <p class="lede"><b>網格分三層：節點座標、網格區塊、區塊之間的關係。</b><code>Mesh</code> 存全部節點的座標；<code>MeshEntity</code> 把元素分成一塊一塊（岩體區塊、邊界線、監測點…），每塊記錄它的元素用了哪些節點；<code>MeshEntityInterconnectivity</code> 記錄區塊之間的從屬關係。</p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>Result 裡的一包位移，各屬於哪個節點、座標在哪裡？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-Mesh">Mesh<small>1 筆</small></a><a href="#t-MeshEntity">MeshEntity<small>775 筆</small></a><a href="#t-MeshEntityInterconnectivity">MeshEntityInterconnectivity<small>1,573 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-Mesh" data-num="3.1" data-short="Mesh" data-title="Mesh"><div class="sec-head"><span class="sec-num">3.1</span><h2>Mesh</h2></div><p class="src">整個模型的節點座標（406,281 個節點）</p><div class="meta"><span>筆數 <b>1</b></span><span>欄位 <b>5</b></span></div>
+  <p>整個模型的節點座標表，只有一列。在 sqlite3 用 <code>SELECT * FROM Mesh</code> 看到的那串 <code>x'cdcccccccccc1040…'</code> 就是 NodeData：每 16 個十六進位字元（8 bytes）是一個 Double，依序是節點 1 的 x、節點 1 的 y、節點 2 的 x…</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>只有 1 筆</td></tr><tr><td>Dimension</td><td>INTEGER NOT NULL</td><td>維度：2（x, y）</td></tr><tr><td>NodeCount</td><td>INTEGER NOT NULL</td><td>節點總數：406,281</td></tr><tr><td>I_ProjectID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>所屬專案 → <a href="../tables/c6.html#t-I_Project"><code>I_Project</code></a></td></tr><tr><td>NodeData<span class="bl">BLOB</span></td><td>BLOB NOT NULL</td><td>全部節點座標：NodeCount × Dimension 個 Double，依序 x1, y1, x2, y2, …</td></tr></table></div>
+  <h3>Python：還原節點座標</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">count, dim, data = con.execute('SELECT NodeCount, Dimension, NodeData FROM Mesh').fetchone()
+xy = np.frombuffer(data, '&lt;f8').reshape(count, dim)
+print('節點數', count, '，陣列形狀', xy.shape, '，資料長度', len(data), 'bytes')
+print('x 範圍', xy[:, 0].min(), '～', xy[:, 0].max(), ' m')
+print('y 範圍', xy[:, 1].min(), '～', xy[:, 1].max(), ' m')
+
+# 節點編號 n 的座標 = xy[n - 1]（編號從 1 開始）
+for name, cd in con.execute("SELECT Name, ComponentData FROM MeshEntity WHERE Name IN ('UserPoint#001', 'UserPoint#003')"):
+    n = int(np.frombuffer(cd, '&lt;u8')[0])
+    print(f'{name}：節點 {n}，座標 {xy[n - 1]}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>節點數 406281 ，陣列形狀 (406281, 2) ，資料長度 6500496 bytes
+x 範圍 -315.0 ～ 360.0  m
+y 範圍 -637.8 ～ 0.0  m
+UserPoint#001：節點 19322，座標 [-315.    0.]
+UserPoint#003：節點 10099，座標 [   0.  -263.3]</code></pre></div>
+  <div class="callout pitfall"><div class="ct">節點編號從 1 開始</div><p>其他表裡的節點編號範圍是 1～406,281（實測：所有三角形用到的節點編號最小 1、最大 406,281，恰好等於節點數）。Python 陣列從 0 開始，所以要 <code>xy[n - 1]</code>。少減 1，座標就會錯到隔壁節點。</p></div>
+</section><section class="sec" id="t-MeshEntity" data-num="3.2" data-short="MeshEntity" data-title="MeshEntity"><div class="sec-head"><span class="sec-num">3.2</span><h2>MeshEntity</h2></div><p class="src">網格區塊：岩體區塊、邊界線、監測點，以及各自的元素連接</p><div class="meta"><span>筆數 <b>775</b></span><span>欄位 <b>10</b></span></div>
+  <p>網格被切成一塊一塊，每塊就是一個 MeshEntity。最重要的是 <b>32 個岩體區塊</b>（三角形、完整區塊），計算結果幾乎都掛在它們身上。每塊的 ComponentData 記錄它的元素用了哪些節點（連接表）。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號；Result 的 MeshEntityID 指的就是它</td></tr><tr><td>Name</td><td>TEXT NOT NULL</td><td>名稱，例如 BoreholePolygon_…（岩體區塊）、BoundaryLine_…（邊界線）、UserPoint#…（監測點）</td></tr><tr><td>ComponentCount</td><td>INTEGER NOT NULL</td><td>元件數：區塊有幾個元素，或節點群有幾個節點</td></tr><tr><td>Hash</td><td>INTEGER NOT NULL</td><td>PLAXIS 內部的雜湊值，用來比對網格是否變過</td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>1 = Input（使用者建的）、3 = Mesher（網格產生器建的） → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>MeshID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>所屬網格 → <a href="../tables/c3.html#t-Mesh"><code>Mesh</code></a></td></tr><tr><td>MeshComponentTypeID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>元件種類：1 節點、2 線、3 三角形 → <a href="../tables/c7.html#t-MeshComponentType"><code>MeshComponentType</code></a></td></tr><tr><td>MeshEntityApplicationID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>用途：1 完整區塊、2 部分節點、4 輔助元素… → <a href="../tables/c7.html#t-MeshEntityApplication"><code>MeshEntityApplication</code></a></td></tr><tr><td>ParentMeshEntityID<span class="fk">FK</span></td><td>INTEGER</td><td>本檔全部是 NULL；從屬關係改記在 MeshEntityInterconnectivity → <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a></td></tr><tr><td>ComponentData<span class="bl">BLOB</span></td><td>BLOB NOT NULL</td><td>元件內容（二進位）：通常是節點編號，見下表</td></tr></table></div>
+  <h3>有哪幾種區塊</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT c.Description AS 元件, a.Description AS 用途, COUNT(*) AS 區塊數,
+       SUM(m.ComponentCount) AS 元件總數, MIN(m.Name) AS 名稱例子
+FROM MeshEntity m
+JOIN MeshComponentType c     ON c.ID = m.MeshComponentTypeID
+JOIN MeshEntityApplication a ON a.ID = m.MeshEntityApplicationID
+GROUP BY c.ID, a.ID ORDER BY c.ID, a.ID;</code></pre></div><div class="subhead">查詢結果（9 列）</div><div class="tablewrap"><table class="data sample"><tr><th>元件</th><th>用途</th><th>區塊數</th><th>元件總數</th><th>名稱例子</th></tr><tr><td>Node</td><td>FullElement</td><td class="num">156</td><td class="num">716</td><td>Fixity Nodes</td></tr><tr><td>Node</td><td>PartialNodal</td><td class="num">11</td><td class="num">11</td><td>CN_1 [Node 50]</td></tr><tr><td>Node</td><td>PartialElement</td><td class="num">11</td><td class="num">11</td><td>UserPoint#003_auxiliary_entity_1</td></tr><tr><td>Line</td><td>FullElement</td><td class="num">359</td><td class="num">5878</td><td>BoundaryLine_1</td></tr><tr><td>Line</td><td>PartialNodal</td><td class="num">40</td><td class="num">40</td><td>CN_1 [Node 50]</td></tr><tr><td>Line</td><td>PartialElement</td><td class="num">40</td><td class="num">40</td><td>BoundaryLine_113_auxiliary_entity_1</td></tr><tr><td>Triangle</td><td>FullElement</td><td class="num">32</td><td class="num">50738</td><td>BoreholePolygon_1_1</td></tr><tr><td>Triangle</td><td>PartialNodal</td><td class="num">63</td><td class="num">63</td><td>CN_1 [Node 50]</td></tr><tr><td>Triangle</td><td>PartialElement</td><td class="num">63</td><td class="num">63</td><td>BoreholePolygon_1_1_auxiliary_entity_1</td></tr></table></div>
+  <h3>ComponentData 怎麼解</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>區塊種類</th><th>每個元件幾 bytes</th><th>內容</th></tr>
+    <tr><td>三角形・完整區塊（岩體）</td><td class="num">120</td><td>15 個 UInt64 節點編號（15 節點三角形）；<b>前 3 個是角點</b>，其餘是邊上與內部節點</td></tr>
+    <tr><td>線・完整區塊（邊界線）</td><td class="num">40</td><td>5 個 UInt64 節點編號（5 節點線元素，配合 15 節點三角形的邊）</td></tr>
+    <tr><td>節點・完整區塊（監測點、固定節點）</td><td class="num">8</td><td>1 個 UInt64 節點編號</td></tr>
+    <tr><td>輔助元素（auxiliary entity）</td><td class="num">8</td><td>1 個 UInt64：<b>母區塊裡第幾個元素（0 起算）</b>，母區塊見 MeshEntityInterconnectivity</td></tr>
+    <tr><td>部分節點（CN_…，曲線點）</td><td class="num">16</td><td>2 個 UInt64，指向母區塊裡的位置；一般讀結果用不到</td></tr>
+  </table></div>
+  <h3>Python：讀一個岩體區塊的元素</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">conn = connectivity(336)
+xy = node_xy()
+print('區塊 336：', conn.shape[0], '個元素，每個元素', conn.shape[1], '個節點')
+print('第 1 個元素的節點編號：', conn[0].tolist())
+print('三個角點座標：')
+print(xy[conn[0, :3] - 1])
+
+# 線元素與輔助元素
+cnt, cd = con.execute("SELECT ComponentCount, ComponentData FROM MeshEntity WHERE Name = 'BoundaryLine_145'").fetchone()
+print('BoundaryLine_145 前兩個線元素：', np.frombuffer(cd, '&lt;u8').reshape(cnt, -1)[:2].tolist())
+for name, cd in con.execute('''SELECT Name, ComponentData FROM MeshEntity
+                               WHERE MeshEntityApplicationID = 4 AND MeshComponentTypeID = 3 LIMIT 2'''):
+    print(name, '→ 母區塊裡的元素索引', np.frombuffer(cd, '&lt;u8').tolist())</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>區塊 336： 316 個元素，每個元素 15 個節點
+第 1 個元素的節點編號： [232, 29, 30, 27359, 25553, 27362, 27360, 27358, 25552, 25554, 27361, 27363, 255271, 255272, 255273]
+三個角點座標：
+[[  -4.6996737  -293.8       ]
+ [  -4.2        -293.8       ]
+ [  -4.2        -293.28066726]]
+BoundaryLine_145 前兩個線元素： [[3167, 18820, 193289, 193288, 193290], [18820, 18819, 193295, 193296, 193294]]
+BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1_auxiliary_entity_1 → 母區塊裡的元素索引 [372]
+BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1_auxiliary_entity_2 → 母區塊裡的元素索引 [373]</code></pre></div>
+  <h3>Python：把網格畫出來</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+xy = node_xy()
+ents = [e for (e,) in con.execute('SELECT ID FROM MeshEntity WHERE MeshComponentTypeID = 3 AND MeshEntityApplicationID = 1')]
+fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
+for ax in axes:
+    for e in ents:
+        tri = connectivity(e)[:, :3] - 1          # 取 3 個角點，換成 0 起算
+        ax.triplot(xy[:, 0], xy[:, 1], tri, lw=0.12, color='0.3')
+    ax.set_aspect('equal')
+axes[1].set_xlim(-30, 80); axes[1].set_ylim(-350, -275)
+axes[0].set_title('Whole model'); axes[1].set_title('Around the caverns')
+fig.savefig('mesh.png', dpi=150, bbox_inches='tight')
+print('畫了', len(ents), '個岩體區塊、', sum(len(connectivity(e)) for e in ents), '個元素')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>畫了 32 個岩體區塊、 50738 個元素</code></pre></div>
+  <figure class="shot"><img src="../assets/img/mesh.png" alt="上面程式產生的圖：左為全模型，右為洞室附近（只畫元素角點連線）" loading="lazy"><figcaption>上面程式產生的圖：左為全模型，右為洞室附近（只畫元素角點連線）</figcaption></figure>
+</section><section class="sec" id="t-MeshEntityInterconnectivity" data-num="3.3" data-short="MeshEntityInterconnectivity" data-title="MeshEntityInterconnectivity"><div class="sec-head"><span class="sec-num">3.3</span><h2>MeshEntityInterconnectivity</h2></div><p class="src">網格區塊之間的關係：誰是誰的面、誰是誰的一部分</p><div class="meta"><span>筆數 <b>1,573</b></span><span>欄位 <b>4</b></span></div>
+  <p>記錄網格區塊之間的關係，例如「這條邊界線是那個岩體區塊的外側面」「這個輔助元素是那個區塊的一部分」。欄位名雖然叫 InterconnectivityID，存的其實是 <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a> 的 ID。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>SourceInterconnectivityID<span class="fk">FK</span></td><td>INTEGER</td><td>來源區塊 → <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a></td></tr><tr><td>TargetInterconnectivityID<span class="fk">FK</span></td><td>INTEGER</td><td>目標區塊 → <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a></td></tr><tr><td>InterconnectivityTypeID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>關係種類；讀法是「來源 是 目標 的 …」 → <a href="../tables/c7.html#t-InterconnectivityType"><code>InterconnectivityType</code></a></td></tr></table></div>
+  <h3>有哪些關係</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT t.Description AS 關係, COUNT(*) AS 筆數,
+       (SELECT s.Name || '  →  ' || g.Name
+          FROM MeshEntityInterconnectivity y
+          JOIN MeshEntity s ON s.ID = y.SourceInterconnectivityID
+          JOIN MeshEntity g ON g.ID = y.TargetInterconnectivityID
+         WHERE y.InterconnectivityTypeID = t.ID LIMIT 1) AS 例子_來源到目標
+FROM MeshEntityInterconnectivity x
+JOIN InterconnectivityType t ON t.ID = x.InterconnectivityTypeID
+GROUP BY t.ID ORDER BY 2 DESC;</code></pre></div><div class="subhead">查詢結果（8 列）</div><div class="tablewrap"><table class="data sample"><tr><th>關係</th><th>筆數</th><th>例子_來源到目標</th></tr><tr><td>External Face Of</td><td class="num">354</td><td>BoundaryLine_2  →  BoreholePolygon_1_Polygon_1_1</td></tr><tr><td>External Volume Of</td><td class="num">354</td><td>BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1  →  inverted_face_161</td></tr><tr><td>Is Part Of</td><td class="num">228</td><td>BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1_auxiliary_entity_1  →  BoreholePolygon_1_Polygon_1_Polygon_2_Polygon_3_Polygon_5_1</td></tr><tr><td>Inward Face Of</td><td class="num">179</td><td>BoundaryLine_1  →  BoreholePolygon_1_1</td></tr><tr><td>Inverted Face Of</td><td class="num">179</td><td>inverted_face_161  →  BoundaryLine_6</td></tr><tr><td>Outward Face Of</td><td class="num">175</td><td>BoundaryLine_2  →  BoreholePolygon_1_Polygon_1_1</td></tr><tr><td>Slave Of</td><td class="num">103</td><td>CN_1 [Node 50]  →  CN_1 [Node 50]</td></tr><tr><td>Internal Point Of</td><td class="num">1</td><td>UserPoint#155  →  BoreholePolygon_1_Polygon_1_Polygon_2_1</td></tr></table></div>
+  <h3>Python：從曲線點的輔助元素找回母區塊與座標</h3>
+  <p>中間計算步只存輔助元素的結果（見 <a href="../tables/c1.html#t-Result"><code>Result</code></a>）。要知道那個元素在哪裡，就靠「Is Part Of」（ID 10）找母區塊，再用元素索引取節點：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python"># 找出有最多計算步結果的輔助元素（三角形）
+def n_steps(e):
+    return con.execute('''SELECT COUNT(*) FROM Result r JOIN Variables v ON v.ID = r.VariablesID
+                          WHERE r.MeshEntityID = ? AND v.Name = 'Displacement' ''', (e,)).fetchone()[0]
+aux = [e for (e,) in con.execute('SELECT ID FROM MeshEntity WHERE MeshEntityApplicationID = 4 AND MeshComponentTypeID = 3')]
+aux_id = max(aux, key=n_steps)
+aux_name, cd = con.execute('SELECT Name, ComponentData FROM MeshEntity WHERE ID = ?', (aux_id,)).fetchone()
+
+parent = con.execute('''SELECT TargetInterconnectivityID FROM MeshEntityInterconnectivity
+                        WHERE SourceInterconnectivityID = ? AND InterconnectivityTypeID = 10''', (aux_id,)).fetchone()[0]
+k = int(np.frombuffer(cd, '&lt;u8')[0])               # 母區塊裡第 k 個元素（0 起算）
+nodes = connectivity(parent)[k]
+print(aux_name)
+print('→ 母區塊', parent, '的第', k, '個元素，角點座標', node_xy()[nodes[:3] - 1].round(2).tolist())
+
+# 這個輔助元素在每一步都有位移 → 可畫成荷載-位移曲線（MeshEntityID 有索引，查詢很快）
+steps = con.execute('''SELECT r.K_StepsID, p.Number, k.Number FROM Result r
+                       JOIN Variables v ON v.ID = r.VariablesID
+                       JOIN K_Steps k   ON k.ID = r.K_StepsID
+                       JOIN I_Phase p   ON p.ID = k.I_PhaseID
+                       WHERE r.MeshEntityID = ? AND v.Name = 'Displacement' ORDER BY r.K_StepsID''', (aux_id,)).fetchall()
+print('有位移結果的計算步：', len(steps), '步（階段', sorted({ph for _, ph, _ in steps}), '）')
+for sid, ph, kn in steps[:3] + steps[-2:]:
+    u = get_result(sid, aux_id, 'Displacement', UNIQUE_NODAL)
+    print(f'  階段 {ph} 第 {kn:2d} 步：第 1 個節點 uy = {u[0, 1] * 1000:8.3f} mm')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>BoreholePolygon_1_1_auxiliary_entity_1
+→ 母區塊 360 的第 8166 個元素，角點座標 [[1.65, -260.94], [-1.41, -261.09], [0.0, -263.3]]
+有位移結果的計算步： 3836 步（階段 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] ）
+  階段 1 第  1 步：第 1 個節點 uy =   -0.069 mm
+  階段 1 第  2 步：第 1 個節點 uy =   -0.138 mm
+  階段 1 第  3 步：第 1 個節點 uy =   -0.207 mm
+  階段 17 第 382 步：第 1 個節點 uy =  -26.233 mm
+  階段 17 第 383 步：第 1 個節點 uy =  -26.239 mm</code></pre></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../tables/c2.html"><span class="dir">← 上一頁</span>3 · ② 施工階段</a><a class="next" href="../tables/c4.html"><span class="dir">下一頁 →</span>3 · ④ 材料</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>

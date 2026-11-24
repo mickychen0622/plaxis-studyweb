@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plaxis2D Simulation</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 1.6em 0; }
+  .flow .f { background: var(--tile); border-radius: 16px; padding: 14px 16px; position: relative; }
+  .flow .f .k { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+  .flow .f .t { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 2px 0 4px; }
+  .flow .f p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+</style>
+</head>
+<body data-page="home" data-root="" data-title="Plaxis2D Simulation">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">PLAXIS 2D · 大型洞室開挖 · 個人學習筆記</div>
+  <h1>Plaxis2D Simulation</h1>
+  <p class="lede"><b>從數值方法的原理，到建模、資料庫、後處理，再到組成律。</b>以光明抽蓄地下廠房的分階開挖模型為主線，把 PLAXIS 2D 從輸入到輸出的每一個環節講清楚；兩個組成律各附一個可以自己調參數的互動試驗室。</p>
+</header>
+
+<section class="sec" id="chapters" data-num="" data-short="六個章節">
+  <div class="sec-head"><span class="sec-num">Contents</span><h2>六個章節</h2></div>
+  <div class="ch-grid">
+    <a class="ch-card" href="ch1_principle.html"><div class="no">1</div><div class="t">Principle of Numerical Simulation</div><div class="zh">數值模擬原理</div>
+      <ul><li>為什麼需要數值方法、如何建立有意義的模型</li><li>有限元素法：離散化、15 節點三角形與應力點</li><li>Step／Iteration、收斂判準、ΣMstage 與錯誤碼</li><li>互動：載重步與迭代的求解過程</li></ul></a>
+    <a class="ch-card" href="ch2_preprocessing.html"><div class="no">2</div><div class="t">Input: Pre-Processing</div><div class="zh">前處理：GUI 與 Command</div>
+      <ul><li>每一個 GUI 步驟的截圖與對應的 Command</li><li>Commands runner 語法規則與物件命名</li><li>分析域、材料、幾何、網格、相位、迭代參數</li><li>完整建模指令檔與常見錯誤</li></ul></a>
+    <a class="ch-card" href="ch3_data.html"><div class="no">3</div><div class="t">Data Structures</div><div class="zh">data.db 資料結構</div>
+      <ul><li>.p2dxdat 資料夾裡的檔案與寫入時機</li><li>data.db 的 37 張表、七大分類</li><li>Result 怎麼靠編號串到其他表</li><li>逐表說明欄位、實際資料與查詢</li></ul></a>
+    <a class="ch-card" href="ch4_postprocessing.html"><div class="no">4</div><div class="t">Post-Processing</div><div class="zh">後處理：Python 讀取與作圖</div>
+      <ul><li>唯讀連線、BLOB 解碼、共用開頭</li><li>作圖規範 fig_style</li><li>逐階曲線、收斂歷程、位移雲圖、塑性範圍</li><li>匯出 CSV</li></ul></a>
+    <a class="ch-card" href="ch5_mohrcoulomb.html"><div class="no">5</div><div class="t">Material Model – Mohr-Coulomb</div><div class="zh">Mohr-Coulomb 組成律</div>
+      <ul><li>線彈性–完全塑性、降伏面與流動法則</li><li>膨脹角、張力截斷、應力點回傳</li><li>PLAXIS 參數與材料視窗</li><li>互動：MC 元素試驗室</li></ul></a>
+    <a class="ch-card" href="ch6_pm4sand.html"><div class="no">6</div><div class="t">Material Model – PM4Sand</div><div class="zh">PM4Sand 組成律</div>
+      <ul><li>臨界狀態與狀態參數</li><li>邊界面、剪脹面、背應力與 fabric</li><li>參數與率定流程</li><li>互動：循環單剪液化試驗室</li></ul></a>
+  </div>
+</section>
+
+<section class="sec" id="route" data-num="" data-short="一個模型的生命週期">
+  <div class="sec-head"><span class="sec-num">Route</span><h2>一個模型的生命週期</h2></div>
+  <p>章節的順序就是做一個 PLAXIS 模型的順序。第 1 章是所有步驟背後的共同原理；第 5、6 章是材料視窗裡那些參數的意義，建模時隨時回頭查。</p>
+  <div class="flow">
+    <div class="f"><div class="k">第 1 章</div><div class="t">想清楚</div><p>要回答什麼問題？範圍、邊界、網格、施工順序怎麼簡化？</p></div>
+    <div class="f"><div class="k">第 2 章</div><div class="t">建模</div><p>GUI 操作一次，記下 Command；之後用 txt 重建與修改。</p></div>
+    <div class="f"><div class="k">第 1 章</div><div class="t">計算</div><p>看懂 Active tasks：ΣMstage、CSP、Global error；失敗時讀錯誤碼。</p></div>
+    <div class="f"><div class="k">第 3 章</div><div class="t">找資料</div><p>結果都在 data.db：哪張表、哪個編號、怎麼存。</p></div>
+    <div class="f"><div class="k">第 4 章</div><div class="t">出圖表</div><p>Python 直接讀 data.db，畫成格式一致的報告圖。</p></div>
+    <div class="f"><div class="k">第 5–6 章</div><div class="t">解釋</div><p>結果為什麼長這樣？回到組成律找原因。</p></div>
+  </div>
+</section>
+
+<section class="sec" id="case" data-num="" data-short="範例模型">
+  <div class="sec-head"><span class="sec-num">Case</span><h2>貫穿全站的範例模型</h2></div>
+  <p>第 2–4 章都用同一個模型：光明抽蓄地下廠房的 plan_e，幾何、範圍與施工順序對照 OpenSees 模型建立，用來比較兩套程式的差異。</p>
+  <div class="tablewrap"><table class="data">
+    <tr><th>項目</th><th>設定</th></tr>
+    <tr><td>洞室</td><td>主廠房開挖寬 25.4 m、高約 50 m；主變室開挖寬 17.8 m；岩柱 30 m</td></tr>
+    <tr><td>分析域</td><td>x −315～360 m、地表至模型底 637.8 m；平面應變、15 節點三角形</td></tr>
+    <tr><td>岩體</td><td>Mohr-Coulomb：E 15 GPa、ν 0.24、c 1351 kPa、φ 38.8°、ψ 0、張力截斷 289 kPa；K0x 0.485、K0z 0.3564</td></tr>
+    <tr><td>施工</td><td>17 階分階開挖、無支撐、每階 ΣMstage 1.0（完全釋放）</td></tr>
+    <tr><td>網格</td><td>洞周 6 m 內 0.5 m、15 m 內 1 m（e5，約 5 萬個元素、40 萬個節點）</td></tr>
+  </table></div>
+  <div class="grid3">
+    <a class="card" href="files/KuanMing_plan_e7.txt"><h4>建模指令檔</h4><p>KuanMing_plan_e7.txt：Commands runner 整份貼上即可重建（第 2 章）</p></a>
+    <a class="card" href="files/plx_common.py"><h4>讀取共用開頭</h4><p>plx_common.py：唯讀連線、BLOB 解碼、常用小函式（第 4 章）</p></a>
+    <a class="card" href="files/fig_style.py"><h4>作圖規範</h4><p>fig_style.py：字型、顏色、框線、圖寬一次設定（第 4 章）</p></a>
+  </div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><span></span><a class="next" href="ch1_principle.html"><span class="dir">開始閱讀 →</span>1 · Principle of Numerical Simulation</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 個人學習筆記</footer>
+
+<script src="assets/common.js"></script>
+</body>
+</html>

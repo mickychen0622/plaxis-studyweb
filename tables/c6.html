@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>⑥ 專案資訊 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c6" data-root="../" data-title="3 · ⑥ 專案資訊">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ⑥ · 3 張表</div>
+  <h1>專案資訊</h1>
+  <p class="lede"><b>整個專案只有一份的資訊。</b>資料庫格式版本、專案識別碼，以及重力、水的單位重、單位、分析類型等整體設定。</p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>這個資料庫用什麼單位？分析類型是平面應變嗎？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-Version">Version<small>1 筆</small></a><a href="#t-I_Project">I_Project<small>1 筆</small></a><a href="#t-ProjectPropertiesData">ProjectPropertiesData<small>32 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-Version" data-num="6.1" data-short="Version" data-title="Version"><div class="sec-head"><span class="sec-num">6.1</span><h2>Version</h2></div><p class="src">資料庫格式版本</p><div class="meta"><span>筆數 <b>1</b></span><span>欄位 <b>5</b></span></div>
+  <p>資料庫<b>格式</b>的版本（不是 PLAXIS 軟體版本）。寫程式時可以先讀它，格式改版時提醒自己檢查解碼方式。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>只有 1 筆</td></tr><tr><td>Major</td><td>INTEGER NOT NULL</td><td>主版本</td></tr><tr><td>Minor</td><td>INTEGER NOT NULL</td><td>次版本</td></tr><tr><td>Patch</td><td>INTEGER NOT NULL</td><td>修訂版</td></tr><tr><td>Date</td><td>TEXT NOT NULL</td><td>日期</td></tr></table></div>
+  <div class="tablewrap"><table class="data sample"><tr><th>ID</th><th>Major</th><th>Minor</th><th>Patch</th><th>Date</th></tr><tr><td class="num">1</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td>2026-11-09</td></tr></table></div>
+</section><section class="sec" id="t-I_Project" data-num="6.2" data-short="I_Project" data-title="I_Project"><div class="sec-head"><span class="sec-num">6.2</span><h2>I_Project</h2></div><p class="src">專案識別碼</p><div class="meta"><span>筆數 <b>1</b></span><span>欄位 <b>2</b></span></div>
+  <p>專案本身，只有一筆。I_Phase、Mesh、Material、ProjectPropertiesData 都用 I_ProjectID 指向它。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>只有 1 筆，其他表的 I_ProjectID 都指向它</td></tr><tr><td>IdentificationGUID</td><td>TEXT NOT NULL</td><td>專案的唯一識別碼</td></tr></table></div>
+  <div class="tablewrap"><table class="data sample"><tr><th>ID</th><th>IdentificationGUID</th></tr><tr><td class="num">1</td><td>{DA7EBF1B-B20C-4E7E-95B4-87374D0B7BC2}</td></tr></table></div>
+</section><section class="sec" id="t-ProjectPropertiesData" data-num="6.3" data-short="ProjectPropertiesData" data-title="ProjectPropertiesData"><div class="sec-head"><span class="sec-num">6.3</span><h2>ProjectPropertiesData</h2></div><p class="src">專案整體設定：重力、單位、分析類型、元素類型</p><div class="meta"><span>筆數 <b>32</b></span><span>欄位 <b>5</b></span></div>
+  <p>專案的整體設定，對應 PLAXIS「Project properties」視窗：重力、水的單位重、模型範圍、單位、分析類型、元素類型…</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>ProjectPropertiesID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個設定項目 → <a href="../tables/c7.html#t-ProjectProperties"><code>ProjectProperties</code></a></td></tr><tr><td>I_ProjectID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>所屬專案 → <a href="../tables/c6.html#t-I_Project"><code>I_Project</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>數值格式；<code>ProjectPropertiesTableId</code> 表示值是 ProjectProperties 的 ID → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB</td><td>設定值（二進位）</td></tr></table></div>
+  <h3>Python：讀出全部設定</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">names = dict(con.execute('SELECT ID, Description FROM ProjectProperties'))
+for pid, di, data in con.execute('SELECT ProjectPropertiesID, DataInterpretationID, Data FROM ProjectPropertiesData ORDER BY ID'):
+    v = decode(data, di)
+    if di == 17:                                   # ProjectPropertiesTableId → 選項名稱
+        v = names[int(v[0])]
+    elif v is not None:
+        v = v[0] if len(v) == 1 else v.tolist()
+    print(f'{names[pid]:52s} {v}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>Gravity                                              9.81
+Water Weight                                         10.0
+Liquid Temperature                                   293.15
+Liquid Specific Heat Capacity                        4181.3
+Liquid Thermal Conductivity                          0.0006
+Liquid Thermal Expansion                             0.00021
+Liquid Latent Heat                                   334000.0
+Ice Specific Heat Capacity                           2108.0
+Ice Thermal Conductivity                             0.00222
+Ice Thermal Expansion                                5e-05
+Vapour Specific Heat Capacity                        1930.0
+Vapour Thermal Conductivity                          2.5e-05
+Vapour Specific Gas Constant                         461.5
+Reference Temperature                                293.15
+Use Temperature Dependent Table                      0
+Contour Min                                          [-315.0, -637.8, -100.0]
+Contour Max                                          [360.0, 0.0, 0.0]
+SoilLayer Count                                      1
+Borehole Count                                       1
+Boreholes Horizontal Position                        [0.0, 0.0]
+Boreholes Vertical Relative Position To SoilLayers   [0.0, -637.8]
+Model Vertical Axis                                  1
+Force Unit Factor                                    1000.0
+Time Unit Factor                                     86400.0
+Length Unit Factor                                   1.0
+Temperature Unit Factor                              1.0
+Mass Unit Factor                                     1000.0
+Energy Unit Factor                                   1000.0
+Power Unit Factor                                    1000.0
+Analysis Type                                        Analysis Type Plane Strain
+Static Acceleration                                  [0.0, -1.0, 0.0]
+Soil Element Type                                    Fifteen-Noded Triangle Soil Element</code></pre></div>
+  <h3>單位怎麼看</h3>
+  <div class="tablewrap"><table class="data">
+    <tr><th>設定</th><th>值</th><th>意思</th></tr>
+    <tr><td>Length Unit Factor</td><td class="num">1</td><td>長度單位 m</td></tr>
+    <tr><td>Force Unit Factor</td><td class="num">1000</td><td>力的單位 = 1000 N = kN，所以應力是 kN/m² = kPa</td></tr>
+    <tr><td>Time Unit Factor</td><td class="num">86400</td><td>時間單位 = 86400 s = day</td></tr>
+    <tr><td>Mass Unit Factor</td><td class="num">1000</td><td>質量單位 = 1000 kg = t</td></tr>
+    <tr><td>Contour Min / Max</td><td>(−315, −637.8) ～ (360, 0)</td><td>模型範圍（m）</td></tr>
+    <tr><td>Analysis Type</td><td>Plane Strain</td><td>平面應變分析</td></tr>
+    <tr><td>Soil Element Type</td><td>Fifteen-Noded Triangle</td><td>15 節點三角形元素，每元素 12 個積分點</td></tr>
+  </table></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../tables/c5.html"><span class="dir">← 上一頁</span>3 · ⑤ 模型物件</a><a class="next" href="../tables/c7.html"><span class="dir">下一頁 →</span>3 · ⑦ 代碼對照表</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>

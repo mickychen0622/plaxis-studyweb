@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>① 計算結果 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c1" data-root="../" data-title="3 · ① 計算結果">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ① · 2 張表</div>
+  <h1>計算結果</h1>
+  <p class="lede"><b>每算完一步，PLAXIS 就把那一步的結果寫進這兩張表。</b><code>Result</code> 存「每一塊網格」的位移、應力、孔隙水壓；<code>GlobalResult</code> 存「整個模型」的收斂資訊，例如 ΣMstage、疊代次數。檔案 3 GB 幾乎都在這裡。</p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>L10 開挖結束時，洞室周圍的位移和應力是多少？要從哪裡讀、怎麼解碼？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-Result">Result<small>5,687,299 筆</small></a><a href="#t-GlobalResult">GlobalResult<small>164,985 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-Result" data-num="1.1" data-short="Result" data-title="Result"><div class="sec-head"><span class="sec-num">1.1</span><h2>Result</h2></div><p class="src">每一步、每一塊網格的計算結果：位移、應力、孔隙水壓…</p><div class="meta"><span>筆數 <b>5,687,299</b></span><span>欄位 <b>9</b></span></div>
+  <p>PLAXIS 每算完一步就往這張表寫入一批列。<b>每一列 = 「哪一步 × 網格的哪一塊 × 哪一種量 × 排在哪裡」的一包數字</b>。全部 5,687,299 列、約 3 GB，是整個檔案的主體。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>ComponentSize</td><td>INTEGER NOT NULL</td><td>每個點有幾個分量。位移 2（u<sub>x</sub>, u<sub>y</sub>）、有效應力 4（σ<sub>xx</sub>, σ<sub>yy</sub>, σ<sub>zz</sub>, σ<sub>xy</sub>）、純量 1</td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>由哪個程式寫入，幾乎都是 2 = Kernel（計算核心） → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>MeshEntityID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>這包數字屬於網格的哪一塊 → <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a></td></tr><tr><td>K_StepsID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪一個計算步；再經 K_Steps 對到施工階段 → <a href="../tables/c2.html#t-K_Steps"><code>K_Steps</code></a></td></tr><tr><td>VariablesID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪一種量（位移、應力…） → <a href="../tables/c7.html#t-Variables"><code>Variables</code></a></td></tr><tr><td>DataLayoutID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>數字排在哪裡：節點、積分點，或整塊一個值 → <a href="../tables/c7.html#t-DataLayout"><code>DataLayout</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>數字格式：Double、Float、SignedInt32… → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB NOT NULL</td><td>真正的數值，二進位。長度 = 筆數 × ComponentSize × 每個數字的 bytes</td></tr></table></div>
+  <h3>一筆結果由四個編號決定</h3>
+  <p>先看某一步、某一塊網格存了哪些量。下面的 <code>40</code> 是 L01 的最後一步（見 <a href="../tables/c2.html#t-K_Steps"><code>K_Steps</code></a>），<code>336</code> 是緊鄰主廠房頂拱的一個岩體區塊（見 <a href="../tables/c3.html#t-MeshEntity"><code>MeshEntity</code></a>）。</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT v.Name AS 變數, dl.Description AS 排列位置, r.ComponentSize AS 分量數,
+       di.Description AS 格式, length(r.Data) AS bytes
+FROM Result r
+JOIN Variables v           ON v.ID  = r.VariablesID
+JOIN DataLayout dl         ON dl.ID = r.DataLayoutID
+JOIN DataInterpretation di ON di.ID = r.DataInterpretationID
+WHERE r.K_StepsID = 40 AND r.MeshEntityID = 336
+ORDER BY dl.ID, v.Name;</code></pre></div><div class="subhead">查詢結果（33 列）</div><div class="tablewrap"><table class="data sample"><tr><th>變數</th><th>排列位置</th><th>分量數</th><th>格式</th><th>bytes</th></tr><tr><td>Cohesion</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Compression Hardening History</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">4</td></tr><tr><td>Effective Saturation</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Effective Stress</td><td>Integration Point</td><td class="num">4</td><td>Double</td><td class="num">121344</td></tr><tr><td>Friction Hardening History</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">4</td></tr><tr><td>Liquefaction History</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">4</td></tr><tr><td>Max Effective Principal Stress</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">30336</td></tr><tr><td>Max Stress 11 at Beginning of Phase</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">30336</td></tr><tr><td>Plastic MC History</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">15168</td></tr><tr><td>Plastic Point Information</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">15168</td></tr><tr><td>Plastic Tension History</td><td>Integration Point</td><td class="num">1</td><td>SignedInt32</td><td class="num">15168</td></tr><tr><td>Relative Permeability</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Saturation</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Steady Pore Pressure</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">30336</td></tr><tr><td>Suction</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Void Ratio</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">30336</td></tr><tr><td>Young's Modulus</td><td>Integration Point</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Active Deconfinement</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Cluster Info</td><td>Mesh Entity</td><td class="num">3</td><td>SignedInt32</td><td class="num">12</td></tr><tr><td>Excess Pore Pressure</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Excess Pore Pressure</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Hydraulic Gradient</td><td>Mesh Entity</td><td class="num">2</td><td>Double</td><td class="num">16</td></tr><tr><td>Initial Deconfinement</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Original Volume</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Phase Volume Change</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Preconsolidation Pressure</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Steady State Darcy Velocity</td><td>Mesh Entity</td><td class="num">2</td><td>Double</td><td class="num">16</td></tr><tr><td>Target Deconfinement</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Volume Change</td><td>Mesh Entity</td><td class="num">1</td><td>Double</td><td class="num">8</td></tr><tr><td>Displacement</td><td>Unique Nodal</td><td class="num">2</td><td>Double</td><td class="num">42256</td></tr><tr><td>Incremental Displacement</td><td>Unique Nodal</td><td class="num">2</td><td>Double</td><td class="num">42256</td></tr><tr><td>Phase Displacement</td><td>Unique Nodal</td><td class="num">2</td><td>Double</td><td class="num">42256</td></tr><tr><td>Steady Pore Pressure</td><td>Unique Nodal</td><td class="num">1</td><td>Double</td><td class="num">21128</td></tr></table></div>
+  <div class="callout intuition"><div class="ct">查詢一定先給 K_StepsID</div><p>Result 的索引是 <code>(K_StepsID, MeshEntityID, VariablesID)</code>，條件從 K_StepsID 開始給，查詢在毫秒內完成；只用 VariablesID 或變數名稱查，SQLite 會掃過整張 3 GB 的表，要好幾秒到幾分鐘。</p></div>
+
+  <h3>Data 裡的數字怎麼排：五種 DataLayout</h3>
+  <p>解碼前要知道 Data 裡的數字各屬於哪個點。這由 <code>DataLayoutID</code> 決定：</p>
+  <div class="tablewrap"><table class="data">
+  <tr><th>DataLayout</th><th>本檔筆數</th><th>一包 Data 裡有幾個點</th><th>排列順序</th><th>典型的量</th></tr>
+  <tr><td><b>Unique Nodal</b>（5）</td><td class="num">686,388</td><td>這一塊的不重複節點數</td><td>節點在連接表中<b>第一次出現的順序</b>（不是編號大小）</td><td>Displacement、Phase Displacement</td></tr>
+  <tr><td><b>Integration Point</b>（2）</td><td class="num">3,027,737</td><td>元素數 × 12</td><td>第 1 個元素的 12 個積分點，接著第 2 個元素…；座標見 <a href="../tables/c5.html#t-StagedUserFeatureGlobalParameterData"><code>StagedUserFeatureGlobalParameterData</code></a></td><td>Effective Stress、Plastic Point Information</td></tr>
+  <tr><td><b>Mesh Entity</b>（3）</td><td class="num">1,891,451</td><td>1</td><td>整塊一個值</td><td>Volume Change、Cluster Info</td></tr>
+  <tr><td><b>Nodal</b>（1）</td><td class="num">81,647</td><td>元素數 × 每元素節點數</td><td>逐元素、逐節點；共用節點會重複出現</td><td>Water Pressure（邊界線）</td></tr>
+  <tr><td><b>Element</b>（4）</td><td class="num">76</td><td>元件數</td><td>每個元件一個值</td><td>Prescribed Displacement（固定節點群）</td></tr>
+</table></div>
+  <div class="callout pitfall"><div class="ct">只有 1 筆，代表整塊同一個值</div><p>Integration Point 的量，如果 Data 只有 8 bytes（1 個 Double），表示整個區塊每個積分點都是同一個值，例如 Young&#39;s Modulus、Cohesion。讀的時候要把它當成常數，不要以為資料不見。</p></div>
+
+  <h3>Python：讀位移（Unique Nodal）並對到節點座標</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">step = last_step(1)                      # L01 最後一步
+ent = 336                                # 岩體區塊（MeshEntity.ID）
+u = get_result(step, ent, 'Displacement', UNIQUE_NODAL)   # (n, 2)：ux, uy，單位 m
+ids = unique_nodes(connectivity(ent))    # 這 n 列各屬於哪個節點
+xy = node_xy()[ids - 1]                  # 節點編號從 1 起算，所以 -1
+
+print('K_Steps.ID =', step, '，位移陣列形狀', u.shape, '，節點數', len(ids))
+k = np.argmax(np.hypot(u[:, 0], u[:, 1]))
+print(f'最大位移在節點 {ids[k]}，座標 ({xy[k, 0]:.2f}, {xy[k, 1]:.2f})')
+print(f'ux = {u[k, 0] * 1000:.2f} mm，uy = {u[k, 1] * 1000:.2f} mm')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>K_Steps.ID = 40 ，位移陣列形狀 (2641, 2) ，節點數 2641
+最大位移在節點 25576，座標 (-4.20, -290.30)
+ux = 2.79 mm，uy = 0.19 mm</code></pre></div>
+
+  <h3>Python：讀積分點應力，並配上積分點座標</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">step, ent = last_step(1), 336
+s = get_result(step, ent, 'Effective Stress', INTEGRATION_POINT)     # (元素數×12, 4)
+
+# 積分點座標存在 StagedUserFeatureGlobalParameterData（StressPoints），用同一個區塊去找
+row = con.execute('''SELECT g.Data, g.DataInterpretationID, g.ComponentSize
+                     FROM StagedUserFeatureGlobalParameterData g
+                     JOIN StagedUserFeature f ON f.ID = g.StagedUserFeatureID
+                     WHERE f.MeshEntityID = ? AND g.ComponentSize = 2''', (ent,)).fetchone()
+pts = decode(*row)                                                  # (元素數×12, 2)
+
+print('應力', s.shape, '；座標', pts.shape)
+print('      x         y      σxx      σyy      σzz      σxy   (kPa，壓為負)')
+for (x, y), (sxx, syy, szz, sxy) in list(zip(pts, s))[:5]:
+    print(f'{x:7.2f} {y:9.2f} {sxx:8.1f} {syy:8.1f} {szz:8.1f} {sxy:8.1f}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>應力 (3792, 4) ；座標 (3792, 2)
+      x         y      σxx      σyy      σzz      σxy   (kPa，壓為負)
+  -4.23   -293.35    -42.6  -5709.2  -1380.4   -350.7
+  -4.64   -293.77  -4963.3  -9658.5  -3509.2   4087.8
+  -4.23   -293.77  -5197.6 -10635.1  -3799.8   5231.8
+  -4.32   -293.54   -769.3  -8381.7  -2196.2    937.2
+  -4.45   -293.67  -5535.1 -10591.3  -3870.3   5557.3</code></pre></div>
+  <div class="callout example"><div class="ct">應力分量順序怎麼確認的</div><p>Effective Stress 的 4 個分量依序是 σ<sub>xx</sub>、σ<sub>yy</sub>、σ<sub>zz</sub>、σ<sub>xy</sub>。驗證方法：初始階段 Ph0 用 K0 程序產生地應力，剪應力應為 0；實測第 4 個分量在 Ph0 全部等於 0，且第 1、3 分量與第 2 分量的比值固定（0.485、0.356，即 K0）。</p></div>
+
+  <h3>哪些步有完整結果</h3>
+  <p>這個模型每個階段只保存最後一步（階段設定 Maximum Number Of Steps Saved = 1，見 <a href="../tables/c2.html#t-PhaseParameterData"><code>PhaseParameterData</code></a>）。中間的計算步只存「曲線點」所在的單一元素（auxiliary entity），用來畫荷載-位移曲線：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT k.Number AS 階段內第幾步, COUNT(*) AS 結果筆數,
+       COUNT(DISTINCT r.MeshEntityID) AS 區塊數
+FROM Result r JOIN K_Steps k ON k.ID = r.K_StepsID
+WHERE k.I_PhaseID = 4 AND k.Number &gt;= 33          -- I_PhaseID 4 = L01
+GROUP BY k.Number;</code></pre></div><div class="subhead">查詢結果（4 列）</div><div class="tablewrap"><table class="data sample"><tr><th>階段內第幾步</th><th>結果筆數</th><th>區塊數</th></tr><tr><td class="num">33</td><td class="num">1779</td><td class="num">63</td></tr><tr><td class="num">34</td><td class="num">1779</td><td class="num">63</td></tr><tr><td class="num">35</td><td class="num">1779</td><td class="num">63</td></tr><tr><td class="num">36</td><td class="num">2898</td><td class="num">114</td></tr></table></div>
+
+  <h3>單位與符號</h3>
+  <ul>
+    <li>單位由 <a href="../tables/c6.html#t-ProjectPropertiesData"><code>ProjectPropertiesData</code></a> 的 Unit Factor 決定：長度 m、力 kN、時間 day，所以應力是 kPa、位移是 m。</li>
+    <li>應力<b>壓為負、拉為正</b>（土壤力學習慣相反，畫圖時常要加負號）。</li>
+    <li>本模型的地下水頭設在 −647.8 m，低於模型底部 −637.8 m，全區都在水位以上。Steady Pore Pressure 為正值，代表吸力；計算設定 Ignore Suction = 1，所以它不影響有效應力。</li>
+  </ul>
+  <div class="quiz" data-answer="1"><div class="qh">小測驗</div><div class="qq">想讀「L05 結束時，區塊 336 的 σ<sub>yy</sub>」，下列哪個組合是對的？</div><div class="opts"><button class="opt">K_StepsID = 5、Displacement、Unique Nodal，取第 2 欄</button><button class="opt">K_StepsID = last_step(5)、Effective Stress、Integration Point，取第 2 欄（索引 1）</button><button class="opt">K_StepsID = last_step(5)、Effective Stress、Mesh Entity，取第 4 欄</button></div><div class="fb">K_StepsID 是全檔流水號，不是階段編號，要用 last_step(5) 換算；應力在積分點上（Integration Point），4 個分量依序 σxx、σyy、σzz、σxy，σyy 是第 2 欄，Python 索引 1。</div></div>
+</section><section class="sec" id="t-GlobalResult" data-num="1.2" data-short="GlobalResult" data-title="GlobalResult"><div class="sec-head"><span class="sec-num">1.2</span><h2>GlobalResult</h2></div><p class="src">每一步「整個模型」的數字：ΣMstage、疊代次數、誤差、塑性點數…</p><div class="meta"><span>筆數 <b>164,985</b></span><span>欄位 <b>7</b></span></div>
+  <p>和 Result 很像，但<b>不分網格區塊</b>：每一步存一組描述「整個模型」的數字，例如這一步的 ΣMstage（施工進度 0→1）、疊代次數、整體誤差、塑性點數。對應 PLAXIS 計算視窗裡看到的那些數字。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>ComponentSize</td><td>INTEGER NOT NULL</td><td>分量數，大多是 1</td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>由哪個程式寫入 → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>K_StepsID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪一個計算步 → <a href="../tables/c2.html#t-K_Steps"><code>K_Steps</code></a></td></tr><tr><td>VariablesID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪一種整體量，例如 SumMStage、Number of Iterations → <a href="../tables/c7.html#t-Variables"><code>Variables</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>數字格式。<b>同一個量在中間步是 Float、在最後一步是 Double</b> → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB NOT NULL</td><td>數值（二進位）</td></tr></table></div>
+  <h3>每一步存了哪些整體量</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT v.Name AS 變數, g.ComponentSize AS 分量數, di.Description AS 格式
+FROM GlobalResult g
+JOIN Variables v           ON v.ID  = g.VariablesID
+JOIN DataInterpretation di ON di.ID = g.DataInterpretationID
+WHERE g.K_StepsID = 40
+ORDER BY v.Name;</code></pre></div><div class="subhead">查詢結果（43 列）</div><div class="tablewrap"><table class="data sample"><tr><th>變數</th><th>分量數</th><th>格式</th></tr><tr><td>Acceleration Multiplier</td><td class="num">1</td><td>Double</td></tr><tr><td>Active Load Array Info</td><td class="num">7</td><td>Double</td></tr><tr><td>Arc-Length Factor</td><td class="num">1</td><td>Double</td></tr><tr><td>CSP</td><td class="num">1</td><td>Double</td></tr><tr><td>Dynamic Time</td><td class="num">1</td><td>Double</td></tr><tr><td>Dynamic Time Increment</td><td class="num">1</td><td>Double</td></tr><tr><td>Extrapolation Factor</td><td class="num">1</td><td>Double</td></tr><tr><td>Global Error Denominator</td><td class="num">1</td><td>Double</td></tr><tr><td>Global Error Maximum Norms</td><td class="num">8</td><td>Double</td></tr><tr><td>Global Residual Error</td><td class="num">6</td><td>Double</td></tr><tr><td>Global Step Number</td><td class="num">1</td><td>UnsignedInt64</td></tr><tr><td>Ignore Suction</td><td class="num">1</td><td>SignedInt32</td></tr><tr><td>Max Absolute Phase Displacement</td><td class="num">1</td><td>Double</td></tr><tr><td>Max Excess Pore Pressure</td><td class="num">1</td><td>Double</td></tr><tr><td>Maximum CPU Count</td><td class="num">1</td><td>SignedInt32</td></tr><tr><td>Number Inaccurate Plastic Points Interface</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Apex Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Cap Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Hardening Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Inaccurate Apex Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Inaccurate Plastic Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Inaccurate Tension Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Iterations</td><td class="num">1</td><td>SignedInt32</td></tr><tr><td>Number of Negative Plastic Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Plastic Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Plastic Points Interface</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Softening Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Tension Points</td><td class="num">6</td><td>Double</td></tr><tr><td>Number of Tension Points Interface</td><td class="num">6</td><td>Double</td></tr><tr><td>Pore Pressure Tension Cut Off</td><td class="num">1</td><td>Double</td></tr><tr><td>Relative Portion Active Area Increment</td><td class="num">1</td><td>Double</td></tr><tr><td>Relative Portion of Active Area</td><td class="num">1</td><td>Double</td></tr><tr><td>Soil Material Sets</td><td class="num">1</td><td>SignedInt32</td></tr><tr><td>Soil Material Values</td><td class="num">200</td><td>Double</td></tr><tr><td>Solver Type</td><td class="num">1</td><td>SignedInt32</td></tr><tr><td>SumMSF</td><td class="num">1</td><td>Double</td></tr><tr><td>SumMSF Increment</td><td class="num">1</td><td>Double</td></tr><tr><td>SumMStage</td><td class="num">1</td><td>Double</td></tr><tr><td>SumMStage Increment</td><td class="num">1</td><td>Double</td></tr><tr><td>Time</td><td class="num">1</td><td>Double</td></tr><tr><td>Time Increment</td><td class="num">1</td><td>Double</td></tr><tr><td>Total Reaction Force of Displacement</td><td class="num">2</td><td>Double</td></tr><tr><td>Total Weight Multiplier</td><td class="num">1</td><td>Double</td></tr></table></div>
+  <h3>同一個量，中間步與最後一步格式不同</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT k.Number AS 第幾步, di.Description AS 格式, length(g.Data) AS bytes, hex(g.Data) AS 原始資料
+FROM GlobalResult g
+JOIN K_Steps k             ON k.ID  = g.K_StepsID
+JOIN Variables v           ON v.ID  = g.VariablesID
+JOIN DataInterpretation di ON di.ID = g.DataInterpretationID
+WHERE k.I_PhaseID = 4 AND v.Name = 'SumMStage' AND k.Number IN (1, 2, 36);</code></pre></div><div class="subhead">查詢結果（3 列）</div><div class="tablewrap"><table class="data sample"><tr><th>第幾步</th><th>格式</th><th>bytes</th><th>原始資料</th></tr><tr><td class="num">1</td><td>Float</td><td class="num">4</td><td>CDCCCC3D</td></tr><tr><td class="num">2</td><td>Float</td><td class="num">4</td><td>CDCC4C3E</td></tr><tr><td class="num">36</td><td>Double</td><td class="num">8</td><td>000000000000F03F</td></tr></table></div>
+  <p>第 1 步的 <code>CDCCCC3D</code> 是 Float 0.1（4 bytes），第 36 步的 <code>000000000000F03F</code> 是 Double 1.0（8 bytes）。用共用開頭的 <code>decode()</code> 照 DataInterpretationID 解碼，兩種都能正確讀出。</p>
+  <h3>Python：各施工階段結束時的整體資訊</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">want = ['Global Step Number', 'SumMStage', 'Number of Iterations', 'Max Absolute Phase Displacement']
+phases = [n for (n,) in con.execute('SELECT Number FROM I_Phase WHERE PhaseTypeID = 1 AND Number &gt;= 1 ORDER BY Number')]
+
+print('階段  總步號  ΣMstage  最後一步疊代  階段最大位移(mm)')
+for num in phases:
+    step = last_step(num)
+    val = {}
+    for name, data, di, cs in con.execute('''SELECT v.Name, g.Data, g.DataInterpretationID, g.ComponentSize
+                                             FROM GlobalResult g JOIN Variables v ON v.ID = g.VariablesID
+                                             WHERE g.K_StepsID = ?''', (step,)).fetchall():
+        if name in want:
+            val[name] = decode(data, di, cs)[0]
+    print(f'L{num:02d}  {val["Global Step Number"]:6d}  {val["SumMStage"]:7.3f}  {val["Number of Iterations"]:10d}'
+          f'  {val["Max Absolute Phase Displacement"] * 1000:14.2f}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>階段  總步號  ΣMstage  最後一步疊代  階段最大位移(mm)
+L01      36    1.000           6            5.45
+L02     182    1.000           5           11.83
+L03     222    1.000          13            4.90
+L04     296    1.000           4            5.99
+L05     351    1.000           5            5.69
+L06     427    1.000           7            6.56
+L07     525    1.000           7            7.15
+L08     621    1.000           2            6.76
+L09     724    1.000           3            6.14
+L10     813    1.000           5            6.54
+L11    1115    1.000           4        11071.89
+L12    1404    1.000           7            9.80
+L13    1747    1.000           7            9.42
+L14    2347    1.000           6           15.47
+L15    2932    1.000           5           12.48
+L16    3453    1.000           3            9.35
+L17    3836    1.000           8       214501.51</code></pre></div>
+  <p>「總步號」是跨階段累計的步數（L02 = 36 + 146 = 182）。L11 與 L17 的階段最大位移異常大，原因是少數節點的局部數值問題，詳見 <a href="../ch4_postprocessing.html#p5">第 4 章 4.5</a>。</p>
+  <div class="callout link"><div class="ct">分量數大於 1 的量</div><p>Number of Plastic Points 等量有 6 個分量、Soil Material Values 有 200 個分量。資料庫裡沒有說明各分量的意義，使用前請先對照 PLAXIS Output 的數值確認。</p></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../ch3_data.html"><span class="dir">← 上一頁</span>3 · Data Structures</a><a class="next" href="../tables/c2.html"><span class="dir">下一頁 →</span>3 · ② 施工階段</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>

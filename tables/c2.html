@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>② 施工階段 · Data Structures · Plaxis2D Simulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style></style>
+</head>
+<body data-page="c2" data-root="../" data-title="3 · ② 施工階段">
+
+<main>
+<header class="hero" id="top">
+  <div class="eyebrow">Chapter 3 · 分類 ② · 3 張表</div>
+  <h1>施工階段</h1>
+  <p class="lede"><b>施工階段（Phase）與計算步（Step）是讀結果的時間座標。</b><code>I_Phase</code> 是階段清單，<code>K_Steps</code> 是每個階段裡的計算步，<code>PhaseParameterData</code> 是每個階段的計算設定。Result 用的 K_StepsID 要從這裡換算。</p>
+  <div class="callout question"><div class="ct">這一類要回答</div><p>這個模型有幾個施工階段？「L05 結束時」對應到哪一個 K_StepsID？</p></div>
+  <h3>這一類的表</h3>
+  <div class="tchips" style="justify-content:center"><a href="#t-I_Phase">I_Phase<small>37 筆</small></a><a href="#t-K_Steps">K_Steps<small>3,856 筆</small></a><a href="#t-PhaseParameterData">PhaseParameterData<small>4,099 筆</small></a></div>
+  <p class="src" style="margin-top:6px">Python 範例都接在 <a href="../ch4_postprocessing.html#p4">共用開頭</a> 之後執行；下方「執行結果」是實際跑出來的輸出。</p>
+</header>
+<section class="sec" id="t-I_Phase" data-num="2.1" data-short="I_Phase" data-title="I_Phase"><div class="sec-head"><span class="sec-num">2.1</span><h2>I_Phase</h2></div><p class="src">施工階段清單：編號、名稱、從哪個階段接續</p><div class="meta"><span>筆數 <b>37</b></span><span>欄位 <b>6</b></span></div>
+  <p>施工階段清單。37 筆裡<b>只有 18 筆是真正的施工階段</b>（PhaseTypeID = 1：Ph0 地應力平衡＋L01～L17 開挖），其餘是 PLAXIS 內部用的副本。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號（其他表用這個）</td></tr><tr><td>Number</td><td>INTEGER NOT NULL</td><td>PLAXIS 畫面上的階段編號：初始階段 0、L01 = 1 … L17 = 17；Unstaged = −1</td></tr><tr><td>Name</td><td>TEXT NOT NULL</td><td>階段名稱（PLAXIS 裡輸入的 ID）</td></tr><tr><td>ParentPhaseID<span class="fk">FK</span></td><td>INTEGER</td><td>從哪一個階段接續（Start from phase）；初始階段為 NULL → <a href="../tables/c2.html#t-I_Phase"><code>I_Phase</code></a></td></tr><tr><td>I_ProjectID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>所屬專案 → <a href="../tables/c6.html#t-I_Project"><code>I_Project</code></a></td></tr><tr><td>PhaseTypeID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>1 = Main（真正的施工階段）、4 = Initial Condition、5 = Unstaged → <a href="../tables/c7.html#t-PhaseType"><code>PhaseType</code></a></td></tr></table></div>
+  <h3>37 筆的組成</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT t.Description AS 階段類型, COUNT(*) AS 筆數,
+       MIN(p.Number) AS 最小Number, MAX(p.Number) AS 最大Number
+FROM I_Phase p JOIN PhaseType t ON t.ID = p.PhaseTypeID
+GROUP BY t.ID;</code></pre></div><div class="subhead">查詢結果（3 列）</div><div class="tablewrap"><table class="data sample"><tr><th>階段類型</th><th>筆數</th><th>最小Number</th><th>最大Number</th></tr><tr><td>Main</td><td class="num">18</td><td class="num">0</td><td class="num">17</td></tr><tr><td>Initial Condition</td><td class="num">18</td><td class="num">0</td><td class="num">17</td></tr><tr><td>Unstaged</td><td class="num">1</td><td class="num">-1</td><td class="num">-1</td></tr></table></div>
+  <p>Initial Condition 是每個 Main 階段的「初始狀態」副本，ParentPhaseID 指回對應的 Main 階段，只有 1 個 Number = 0 的計算步，存邊界水頭、固定條件等起始資料。讀計算結果時用 <code>PhaseTypeID = 1</code> 篩掉它們即可。</p>
+  <h3>真正的施工階段</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT p.ID, p.Number, p.Name, p.ParentPhaseID,
+       (SELECT COUNT(*) FROM K_Steps k WHERE k.I_PhaseID = p.ID) AS 計算步數
+FROM I_Phase p
+WHERE p.PhaseTypeID = 1
+ORDER BY p.Number;</code></pre></div><div class="subhead">查詢結果（18 列）</div><div class="tablewrap"><table class="data sample"><tr><th>ID</th><th>Number</th><th>Name</th><th>ParentPhaseID</th><th>計算步數</th></tr><tr><td class="num">2</td><td class="num">0</td><td>Ph0_地應力平衡 [InitialPhase]</td><td class="blob">NULL</td><td class="num">1</td></tr><tr><td class="num">4</td><td class="num">1</td><td>L01_主廠房頂拱中央導坑 [Phase_1]</td><td class="num">2</td><td class="num">36</td></tr><tr><td class="num">5</td><td class="num">2</td><td>L02_主廠房頂拱兩側擴挖 [Phase_2]</td><td class="num">4</td><td class="num">146</td></tr><tr><td class="num">6</td><td class="num">3</td><td>L03_主廠房台階至EL906.6 [Phase_3]</td><td class="num">5</td><td class="num">40</td></tr><tr><td class="num">7</td><td class="num">4</td><td>L04_主廠房台階至EL904.1 [Phase_4]</td><td class="num">6</td><td class="num">74</td></tr><tr><td class="num">8</td><td class="num">5</td><td>L05_主廠房台階至EL901.6＋主變室頂拱中央導坑 [Phase_5]</td><td class="num">7</td><td class="num">55</td></tr><tr><td class="num">9</td><td class="num">6</td><td>L06_主廠房台階至EL899.1 [Phase_6]</td><td class="num">8</td><td class="num">76</td></tr><tr><td class="num">10</td><td class="num">7</td><td>L07_主廠房台階至EL896.0 [Phase_7]</td><td class="num">9</td><td class="num">98</td></tr><tr><td class="num">11</td><td class="num">8</td><td>L08_主廠房台階至EL893.5 [Phase_8]</td><td class="num">10</td><td class="num">96</td></tr><tr><td class="num">12</td><td class="num">9</td><td>L09_主廠房台階至EL891.0 [Phase_9]</td><td class="num">11</td><td class="num">103</td></tr><tr><td class="num">13</td><td class="num">10</td><td>L10_主廠房台階至EL888.0 [Phase_10]</td><td class="num">12</td><td class="num">89</td></tr><tr><td class="num">14</td><td class="num">11</td><td>L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖 [Phase_11]</td><td class="num">13</td><td class="num">302</td></tr><tr><td class="num">15</td><td class="num">12</td><td>L12_主廠房台階至EL881.9＋主變室台階至EL896.0 [Phase_12]</td><td class="num">14</td><td class="num">289</td></tr><tr><td class="num">16</td><td class="num">13</td><td>L13_主廠房台階至EL878.9＋主變室台階至EL893.5 [Phase_13]</td><td class="num">15</td><td class="num">343</td></tr><tr><td class="num">17</td><td class="num">14</td><td>L14_主廠房台階至EL875.8＋主變室台階至EL891.0 [Phase_14]</td><td class="num">16</td><td class="num">600</td></tr><tr><td class="num">18</td><td class="num">15</td><td>L15_主廠房台階至EL872.3＋主變室台階至EL888.5 [Phase_15]</td><td class="num">17</td><td class="num">585</td></tr><tr><td class="num">19</td><td class="num">16</td><td>L16_主廠房台階至EL869.2＋主變室台階至EL885.9 [Phase_16]</td><td class="num">18</td><td class="num">521</td></tr><tr><td class="num">20</td><td class="num">17</td><td>L17_主廠房台階至EL865.2＋主變室台階至EL883.4 [Phase_17]</td><td class="num">19</td><td class="num">383</td></tr></table></div>
+  <h3>Python：沿著 ParentPhaseID 走出施工順序</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">info = {pid: (num, name, parent)
+        for pid, num, name, parent in con.execute('SELECT ID, Number, Name, ParentPhaseID FROM I_Phase')}
+
+pid = con.execute('SELECT ID FROM I_Phase WHERE Number = 17 AND PhaseTypeID = 1').fetchone()[0]
+chain = []
+while pid is not None:                   # 從 L17 一路往回找到初始階段
+    num, name, parent = info[pid]
+    chain.append(f'{num:2d}  {name}')
+    pid = parent
+print('\n'.join(reversed(chain)))</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code> 0  Ph0_地應力平衡 [InitialPhase]
+ 1  L01_主廠房頂拱中央導坑 [Phase_1]
+ 2  L02_主廠房頂拱兩側擴挖 [Phase_2]
+ 3  L03_主廠房台階至EL906.6 [Phase_3]
+ 4  L04_主廠房台階至EL904.1 [Phase_4]
+ 5  L05_主廠房台階至EL901.6＋主變室頂拱中央導坑 [Phase_5]
+ 6  L06_主廠房台階至EL899.1 [Phase_6]
+ 7  L07_主廠房台階至EL896.0 [Phase_7]
+ 8  L08_主廠房台階至EL893.5 [Phase_8]
+ 9  L09_主廠房台階至EL891.0 [Phase_9]
+10  L10_主廠房台階至EL888.0 [Phase_10]
+11  L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖 [Phase_11]
+12  L12_主廠房台階至EL881.9＋主變室台階至EL896.0 [Phase_12]
+13  L13_主廠房台階至EL878.9＋主變室台階至EL893.5 [Phase_13]
+14  L14_主廠房台階至EL875.8＋主變室台階至EL891.0 [Phase_14]
+15  L15_主廠房台階至EL872.3＋主變室台階至EL888.5 [Phase_15]
+16  L16_主廠房台階至EL869.2＋主變室台階至EL885.9 [Phase_16]
+17  L17_主廠房台階至EL865.2＋主變室台階至EL883.4 [Phase_17]</code></pre></div>
+  <div class="quiz" data-answer="2"><div class="qh">小測驗</div><div class="qq">I_Phase 有 37 筆，這個模型真正的施工階段有幾個？</div><div class="opts"><button class="opt">37 個</button><button class="opt">36 個（扣掉 Unstaged）</button><button class="opt">18 個（PhaseTypeID = 1）</button></div><div class="fb">只有 PhaseTypeID = 1（Main）是施工階段：Ph0 加 L01～L17 共 18 個。另外 18 筆是 Initial Condition 副本，1 筆是 Unstaged。</div></div>
+</section><section class="sec" id="t-K_Steps" data-num="2.2" data-short="K_Steps" data-title="K_Steps"><div class="sec-head"><span class="sec-num">2.2</span><h2>K_Steps</h2></div><p class="src">每個施工階段裡的計算步；Result 用的 K_StepsID 就是這裡的 ID</p><div class="meta"><span>筆數 <b>3,856</b></span><span>欄位 <b>3</b></span></div>
+  <p>每個施工階段裡的計算步（PLAXIS 計算視窗裡的 Step）。PLAXIS 用荷載增量把一個階段分成很多小步，每一步都在這裡留一列。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td><b>全檔唯一的步編號</b>；Result、GlobalResult 用的就是它</td></tr><tr><td>Number</td><td>INTEGER NOT NULL</td><td>這個階段裡的第幾步，每個階段從 1 重新起算（Initial Condition、Unstaged 為 0）</td></tr><tr><td>I_PhaseID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>屬於哪個施工階段 → <a href="../tables/c2.html#t-I_Phase"><code>I_Phase</code></a></td></tr></table></div>
+  <div class="callout pitfall"><div class="ct">ID 和 Number 不一樣</div><p>Number 是「階段內第幾步」，每個階段都從 1 開始；ID 是整個檔案的流水號。Result 的 K_StepsID 對的是 <b>ID</b>。L01 的第 36 步，ID 是 40。</p></div>
+  <h3>每個階段的最後一步</h3>
+  <p>完整結果只存在每個階段的最後一步，所以最常用的查詢就是找出它的 ID：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT p.Number AS 階段, p.Name AS 名稱, MAX(k.Number) AS 步數,
+       (SELECT k2.ID FROM K_Steps k2 WHERE k2.I_PhaseID = p.ID
+         ORDER BY k2.Number DESC LIMIT 1) AS 最後一步的ID
+FROM I_Phase p JOIN K_Steps k ON k.I_PhaseID = p.ID
+WHERE p.PhaseTypeID = 1
+GROUP BY p.ID ORDER BY p.Number;</code></pre></div><div class="subhead">查詢結果（18 列）</div><div class="tablewrap"><table class="data sample"><tr><th>階段</th><th>名稱</th><th>步數</th><th>最後一步的ID</th></tr><tr><td class="num">0</td><td>Ph0_地應力平衡 [InitialPhase]</td><td class="num">1</td><td class="num">3</td></tr><tr><td class="num">1</td><td>L01_主廠房頂拱中央導坑 [Phase_1]</td><td class="num">36</td><td class="num">40</td></tr><tr><td class="num">2</td><td>L02_主廠房頂拱兩側擴挖 [Phase_2]</td><td class="num">146</td><td class="num">187</td></tr><tr><td class="num">3</td><td>L03_主廠房台階至EL906.6 [Phase_3]</td><td class="num">40</td><td class="num">228</td></tr><tr><td class="num">4</td><td>L04_主廠房台階至EL904.1 [Phase_4]</td><td class="num">74</td><td class="num">303</td></tr><tr><td class="num">5</td><td>L05_主廠房台階至EL901.6＋主變室頂拱中央導坑 [Phase_5]</td><td class="num">55</td><td class="num">359</td></tr><tr><td class="num">6</td><td>L06_主廠房台階至EL899.1 [Phase_6]</td><td class="num">76</td><td class="num">436</td></tr><tr><td class="num">7</td><td>L07_主廠房台階至EL896.0 [Phase_7]</td><td class="num">98</td><td class="num">535</td></tr><tr><td class="num">8</td><td>L08_主廠房台階至EL893.5 [Phase_8]</td><td class="num">96</td><td class="num">632</td></tr><tr><td class="num">9</td><td>L09_主廠房台階至EL891.0 [Phase_9]</td><td class="num">103</td><td class="num">736</td></tr><tr><td class="num">10</td><td>L10_主廠房台階至EL888.0 [Phase_10]</td><td class="num">89</td><td class="num">826</td></tr><tr><td class="num">11</td><td>L11_主廠房台階至EL884.9＋主變室頂拱兩側擴挖 [Phase_11]</td><td class="num">302</td><td class="num">1129</td></tr><tr><td class="num">12</td><td>L12_主廠房台階至EL881.9＋主變室台階至EL896.0 [Phase_12]</td><td class="num">289</td><td class="num">1419</td></tr><tr><td class="num">13</td><td>L13_主廠房台階至EL878.9＋主變室台階至EL893.5 [Phase_13]</td><td class="num">343</td><td class="num">1763</td></tr><tr><td class="num">14</td><td>L14_主廠房台階至EL875.8＋主變室台階至EL891.0 [Phase_14]</td><td class="num">600</td><td class="num">2364</td></tr><tr><td class="num">15</td><td>L15_主廠房台階至EL872.3＋主變室台階至EL888.5 [Phase_15]</td><td class="num">585</td><td class="num">2991</td></tr><tr><td class="num">16</td><td>L16_主廠房台階至EL869.2＋主變室台階至EL885.9 [Phase_16]</td><td class="num">521</td><td class="num">3523</td></tr><tr><td class="num">17</td><td>L17_主廠房台階至EL865.2＋主變室台階至EL883.4 [Phase_17]</td><td class="num">383</td><td class="num">3907</td></tr></table></div>
+  <h3>Python：last_step() 怎麼寫</h3>
+  <p>共用開頭的 <code>last_step()</code> 就是把上面的查詢包成函式：</p>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">for n in (0, 1, 2, 17):
+    print(f'階段 {n:2d} 的最後一步：K_Steps.ID = {last_step(n)}')
+
+# 看 L02 的步：Number 從 1 開始，ID 接著 L01 之後
+pid = con.execute('SELECT ID FROM I_Phase WHERE Number = 2 AND PhaseTypeID = 1').fetchone()[0]
+rows = con.execute('SELECT ID, Number FROM K_Steps WHERE I_PhaseID = ? ORDER BY Number', (pid,)).fetchall()
+print('L02 前三步 (ID, Number)：', rows[:3], '… 最後一步：', rows[-1])</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>階段  0 的最後一步：K_Steps.ID = 3
+階段  1 的最後一步：K_Steps.ID = 40
+階段  2 的最後一步：K_Steps.ID = 187
+階段 17 的最後一步：K_Steps.ID = 3907
+L02 前三步 (ID, Number)： [(42, 1), (43, 2), (44, 3)] … 最後一步： (187, 146)</code></pre></div>
+</section><section class="sec" id="t-PhaseParameterData" data-num="2.3" data-short="PhaseParameterData" data-title="PhaseParameterData"><div class="sec-head"><span class="sec-num">2.3</span><h2>PhaseParameterData</h2></div><p class="src">每個施工階段的計算設定：計算類型、步數上限、容許誤差…</p><div class="meta"><span>筆數 <b>4,099</b></span><span>欄位 <b>7</b></span></div>
+  <p>每個施工階段的計算設定，對應 PLAXIS「Phases」視窗裡的選項：計算類型、荷載輸入方式、最大步數、容許誤差、是否忽略吸力…。每個 Main 階段約 112 列。</p>
+  <div class="tablewrap"><table class="data cols"><tr><th>欄位</th><th>型別</th><th>意思</th></tr><tr><td>ID<span class="pk">PK</span></td><td>INTEGER</td><td>流水號</td></tr><tr><td>PhaseParameterID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>參數名稱 → <a href="../tables/c7.html#t-PhaseParameter"><code>PhaseParameter</code></a></td></tr><tr><td>CreatorID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>由哪個程式寫入 → <a href="../tables/c7.html#t-Creator"><code>Creator</code></a></td></tr><tr><td>ParentParameterDataID<span class="fk">FK</span></td><td>INTEGER</td><td>指向<b>同一張表</b>的另一列，用來分組，例如屬於「Deformation Calculation Data」群組 → <a href="../tables/c2.html#t-PhaseParameterData"><code>PhaseParameterData</code></a></td></tr><tr><td>I_PhaseID<span class="fk">FK</span></td><td>INTEGER NOT NULL</td><td>哪個施工階段 → <a href="../tables/c2.html#t-I_Phase"><code>I_Phase</code></a></td></tr><tr><td>DataInterpretationID<span class="fk">FK</span></td><td>INTEGER</td><td>數值格式；<code>PhaseParameterTableId</code> 表示值是 PhaseParameter 的 ID（列舉值） → <a href="../tables/c7.html#t-DataInterpretation"><code>DataInterpretation</code></a></td></tr><tr><td>Data<span class="bl">BLOB</span></td><td>BLOB</td><td>參數值（二進位）；群組列本身為 NULL</td></tr></table></div>
+  <h3>值是編號時：列舉值</h3>
+  <p>像「計算類型」這種選項，Data 存的不是文字而是編號，格式標成 <code>PhaseParameterTableId</code>，數字就是 <a href="../tables/c7.html#t-PhaseParameter"><code>PhaseParameter</code></a> 的 ID。例如 69 = Plastic Calculation、83 = Staged Construction Loading Type。PhaseParameter 同時當「參數名稱表」與「選項名稱表」用。</p>
+  <h3>同名參數出現多次：看群組</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">SQL（sqlite3 終端機或 Python 皆可）</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-sql">SELECT p.Description AS 參數, g.Description AS 所屬群組, di.Description AS 格式, hex(d.Data) AS 原始資料
+FROM PhaseParameterData d
+JOIN PhaseParameter p           ON p.ID  = d.PhaseParameterID
+LEFT JOIN PhaseParameterData pd ON pd.ID = d.ParentParameterDataID
+LEFT JOIN PhaseParameter g      ON g.ID  = pd.PhaseParameterID
+LEFT JOIN DataInterpretation di ON di.ID = d.DataInterpretationID
+WHERE d.I_PhaseID = 4 AND p.Description LIKE 'Maximum Number Of%';</code></pre></div><div class="subhead">查詢結果（7 列）</div><div class="tablewrap"><table class="data sample"><tr><th>參數</th><th>所屬群組</th><th>格式</th><th>原始資料</th></tr><tr><td>Maximum Number Of Steps</td><td>Deformation Calculation Data</td><td>UnsignedInt64</td><td>B80B000000000000</td></tr><tr><td>Maximum Number Of Steps</td><td>Pore Pressure Calculation Data</td><td>UnsignedInt64</td><td>E803000000000000</td></tr><tr><td>Maximum Number Of Steps</td><td>Thermal Calculation Data</td><td>UnsignedInt64</td><td>FFFFFFFFFFFFFFFF</td></tr><tr><td>Maximum Number Of Iterations</td><td>Deformation Calculation Data</td><td>UnsignedInt64</td><td>3C00000000000000</td></tr><tr><td>Maximum Number Of Iterations</td><td>Pore Pressure Calculation Data</td><td>UnsignedInt64</td><td>FFFFFFFFFFFFFFFF</td></tr><tr><td>Maximum Number Of Iterations</td><td>Thermal Calculation Data</td><td>UnsignedInt64</td><td>FFFFFFFFFFFFFFFF</td></tr><tr><td>Maximum Number Of Steps Saved</td><td>Deformation Calculation Data</td><td>UnsignedInt64</td><td>0100000000000000</td></tr></table></div>
+  <p>同一個「Maximum Number Of Steps」分屬變形、孔隙水壓、熱計算三個群組。<code>FFFFFFFFFFFFFFFF</code> 是 UnsignedInt64 的最大值 18446744073709551615，PLAXIS 用它表示「未設定」（Double 參數則用 −1）。這個模型只做變形計算，看 Deformation Calculation Data 群組即可。</p>
+  <h3>Python：讀出 L01 的變形計算設定</h3>
+  <div class="codeblock"><div class="cb-h"><span class="t">Python</span><button class="cb-copy" type="button">複製</button></div><pre><code class="lang-python">pid = con.execute('SELECT ID FROM I_Phase WHERE Number = 1 AND PhaseTypeID = 1').fetchone()[0]
+names = dict(con.execute('SELECT ID, Description FROM PhaseParameter'))   # 參數名稱，也是列舉值名稱
+rows = con.execute('''SELECT ID, PhaseParameterID, ParentParameterDataID, DataInterpretationID, Data
+                      FROM PhaseParameterData WHERE I_PhaseID = ?''', (pid,)).fetchall()
+group = {rid: names[ppid] for rid, ppid, *_ in rows}         # 本階段每一列的名稱，用來認群組
+
+for rid, ppid, parent, di, data in rows:
+    if data is None or group.get(parent) != 'Deformation Calculation Data':
+        continue
+    v = decode(data, di)[0]
+    if di == 14:                       # PhaseParameterTableId → 換成選項名稱
+        v = names[int(v)]
+    print(f'{names[ppid]:38s} {v}')</code></pre></div><div class="codeblock out"><div class="cb-h"><span class="t">執行結果</span></div><pre><code>Deformation Calculation Type           Plastic Calculation
+Load Advancement Type                  Ultimate Level Load Advancement
+Arc Length Control Type                Disable Arc Length Control
+Use Updated Water Pressure             0
+Ignore Undrained Behaviour             0
+Use Updated Mesh                       0
+Reset Displacement To Zero             0
+Maximum Number Of Steps                3000
+Automatic Maximum Number Of Steps      0
+Maximum Number Of Iterations           60
+Desired Minimum Number Of Iterations   6
+Desired Maximum Number Of Iterations   15
+Maximum Unloading Steps                20
+Use Line Search                        0
+Use Gradual Error Reduction            0
+Use Cavitation Cut Off                 0
+Subspace Size                          3
+Reset State Variables                  0
+Reset Small Strain                     0
+Ignore Suction                         1
+Maximum Number Of Steps Saved          1
+Reset Time                             0
+Ignore Undrained Activated Cluster     1
+Use Subspace Accelerator               0
+Over Relaxation Factor                 1.2
+Tolerated Error                        0.01
+Cavitation Stress                      100.0
+Maximum Load Fraction Per Step         0.1
+Sum M Weight                           1.0
+Ultimate Time                          0.0</code></pre></div>
+</section>
+</main>
+<div class="pager-wrap"><nav class="pager"><a href="../tables/c1.html"><span class="dir">← 上一頁</span>3 · ① 計算結果</a><a class="next" href="../tables/c3.html"><span class="dir">下一頁 →</span>3 · ③ 網格</a></nav></div>
+<footer class="site">Plaxis2D Simulation · 第 3–4 章範例資料：e5_TC289_NearMesh.p2dxdat · 個人學習筆記</footer>
+
+<script src="../assets/common.js"></script>
+</body>
+</html>
